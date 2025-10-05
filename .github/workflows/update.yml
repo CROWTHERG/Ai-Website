@@ -1,0 +1,51 @@
+name: Autonomous AI daily update
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # every day at 00:00 UTC (24hr cycle) - adjust if needed
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run AI brain
+        env:
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+        run: |
+          if [ -n "${{ secrets.COHERE_API_KEY }}" ] || [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "Running real mode (keys present)"
+            node ai_brain.js
+          else
+            echo "No API keys found: running simulate mode"
+            MODE=simulate node ai_brain.js
+          fi
+
+      - name: Commit & push if changed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "autonomous-ai-bot"
+          git config user.email "autobot@local"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "AI auto-update: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            git push
+          else
+            echo "No changes to commit."
+          fi
