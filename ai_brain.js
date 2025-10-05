@@ -1,11 +1,11 @@
-// ai_brain.js
+// ai_brain.js - Autonomous AI brain
 const fs = require('fs');
 const path = require('path');
 const child_process = require('child_process');
 const { generateMetaFromFragment, writeMeta } = require('./seo');
 const generateSitemap = require('./sitemap');
 
-const MODE = (process.env.MODE || process.argv[2] || '').toLowerCase();
+const MODE = (process.env.MODE || '').toLowerCase();
 const SIMULATE = MODE === 'simulate' || MODE === 'demo' || MODE === 'dry';
 const COHERE_KEY = process.env.COHERE_API_KEY || '';
 const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
@@ -21,24 +21,18 @@ const CSS_END = '/* AI-CSS-END */';
 const PROTECTED_SNIPPET = 'Created by CrowtherTech';
 const MAX_BYTES = 40 * 1024; // 40 KB per fragment
 
+function log(msg){ console.log('[AI-BRAIN] '+msg); }
 function read(p){ return fs.existsSync(p) ? fs.readFileSync(p,'utf8') : null; }
 function write(p,c){ fs.writeFileSync(p,c,'utf8'); }
 function ensureBackupDir(){ if(!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR); }
+function backupFile(p){ ensureBackupDir(); const now = new Date().toISOString().replace(/[:.]/g,'-'); const dest = path.join(BACKUP_DIR, path.basename(p)+'.'+now+'.bak'); fs.copyFileSync(p,dest); return dest; }
 
-function backupFile(p){
-  ensureBackupDir();
-  const now = new Date().toISOString().replace(/[:.]/g,'-');
-  const dest = path.join(BACKUP_DIR, path.basename(p) + '.' + now + '.bak');
-  fs.copyFileSync(p, dest);
-  return dest;
-}
-
-// Simulated generator: decides site type, name, fragment and CSS
+// --- Simulation fallback ---
 function simulatePlan(currentFragment, cssFragment, memory){
   const types = ['microblog','portfolio','gallery','journal','tools-portal','idea-lab'];
   const choice = types[(memory.length + (new Date()).getDate()) % types.length];
   const nameBases = ['Nova','Aurora','Lumen','Echo','Pulse','Node','Atlas','Horizon'];
-  const name = `${nameBases[(memory.length)%nameBases.length]}-${Math.floor(Math.random()*900+100)}`;
+  const name = `${nameBases[memory.length % nameBases.length]}-${Math.floor(Math.random()*900+100)}`;
   const css = `
 /* AI-generated CSS: ${choice} theme */
 :root{--bg:#0a0f1a;--text:#eaf6ff;--accent:#9ef7d3}
@@ -54,7 +48,7 @@ body{background:linear-gradient(180deg,var(--bg),#071223);color:var(--text);font
   return { name, type: choice, css, fragment };
 }
 
-// Helper: call Cohere
+// --- Optional AI calls ---
 async function callCohere(prompt){
   const Cohere = require('cohere-ai');
   Cohere.init(COHERE_KEY);
@@ -64,10 +58,9 @@ async function callCohere(prompt){
     max_tokens: 900,
     temperature: 0.6
   });
-  return (resp && resp.body && resp.body.generations && resp.body.generations[0] && resp.body.generations[0].text) || '';
+  return (resp?.body?.generations?.[0]?.text) || '';
 }
 
-// Helper: call OpenAI (chat completions)
 async function callOpenAI(prompt){
   const { OpenAI } = require('openai');
   const client = new OpenAI({ apiKey: OPENAI_KEY });
@@ -77,175 +70,105 @@ async function callOpenAI(prompt){
     max_tokens: 1200,
     temperature: 0.7
   });
-  return (res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content) || '';
+  return (res?.choices?.[0]?.message?.content) || '';
 }
 
+// --- Decide site plan ---
 async function askModelForPlan(currentFragment, cssFragment, memory){
-  if(SIMULATE) return simulatePlan(currentFragment, cssFragment, memory);
-  // Build prompt requesting a JSON response with explicit fields
+  if(SIMULATE || (!COHERE_KEY && !OPENAI_KEY)){
+    log('Using simulation mode for plan.');
+    return simulatePlan(currentFragment, cssFragment, memory);
+  }
+
   const recent = memory.slice(-6).map(m=>`- ${m.date}: ${m.note}`).join('\n') || '- none';
   const prompt = `
-You are an autonomous website designer and writer. Output strictly a JSON object (no surrounding text) with keys:
+You are an autonomous website designer. Output strictly a JSON object:
 {
   "site_name": string,
-  "site_type": string, // e.g. "microblog","portfolio","gallery","tool-site"
-  "html_fragment": "<...>", // HTML string to place between <!-- AI-START --> and <!-- AI-END -->
-  "css_fragment": "/* ... */", // CSS to replace the AI-CSS region (only content between markers)
+  "site_type": string,
+  "html_fragment": "<...>",
+  "css_fragment": "/* ... */",
   "meta": { "title": "...", "description": "...", "keywords": "a,b,c" }
 }
-Constraints:
-- Do NOT modify or reference the protected creator info.
-- html_fragment must be <= ${MAX_BYTES} bytes; css_fragment must be <= ${MAX_BYTES} bytes.
-- html_fragment must NOT contain the markers <!-- AI-START --> or <!-- AI-END -->.
-- css_fragment must NOT contain the markers /* AI-CSS-START */ or /* AI-CSS-END */.
-- Keep content non-identifying and non-sensitive.
-
-Current HTML region (context):
+Current HTML region:
 ${currentFragment}
-
-Current CSS region (context):
+Current CSS region:
 ${cssFragment}
-
 Recent memory:
 ${recent}
-
-Return the JSON exactly.
 `;
-  // prefer Cohere if key set; else OpenAI if key set
+
   if(COHERE_KEY){
     const raw = await callCohere(prompt);
-    // cohere sometimes returns with extra text — try to extract JSON substring
     const jsonText = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}')+1);
-    try { return JSON.parse(jsonText); } catch(e){ throw new Error('Failed to parse Cohere JSON response: ' + e.message + '\nRaw:' + raw); }
+    return JSON.parse(jsonText);
   } else if(OPENAI_KEY){
     const raw = await callOpenAI(prompt);
     const jsonText = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}')+1);
-    try { return JSON.parse(jsonText); } catch(e){ throw new Error('Failed to parse OpenAI JSON response: ' + e.message + '\nRaw:' + raw); }
+    return JSON.parse(jsonText);
   } else {
-    throw new Error('No model keys set and not in simulate mode.');
+    log('No AI keys set; falling back to simulation.');
+    return simulatePlan(currentFragment, cssFragment, memory);
   }
 }
 
+// --- Main run ---
 async function run(){
-  // read files
+  log('Starting AI brain run...');
   const html = read(INDEX);
-  if(!html) throw new Error('index.html not found.');
-  if(!html.includes(PROTECTED_SNIPPET)) throw new Error('Protected creator info missing or modified.');
+  if(!html){ log('index.html not found. Creating default.'); write(INDEX, `<!DOCTYPE html><html><head><title>Autonomous AI</title></head><body><!-- AI-START --><!-- AI-END --></body></html>`); }
 
-  const s = html.indexOf(START);
-  const e = html.indexOf(END);
-  if(s===-1 || e===-1 || e<s) throw new Error('AI HTML markers missing or malformed.');
+  const htmlContent = read(INDEX);
+  if(!htmlContent.includes(PROTECTED_SNIPPET)){
+    log('Protected snippet missing; adding it.');
+    write(INDEX, `<!-- ${PROTECTED_SNIPPET} -->\n${htmlContent}`);
+  }
 
-  const before = html.slice(0, s + START.length);
-  const currentFragment = html.slice(s + START.length, e);
-  const after = html.slice(e);
+  const s = htmlContent.indexOf(START);
+  const e = htmlContent.indexOf(END);
+  const before = htmlContent.slice(0, s + START.length);
+  const currentFragment = htmlContent.slice(s + START.length, e);
+  const after = htmlContent.slice(e);
 
-  const css = read(CSS);
-  if(!css) throw new Error('style.css missing.');
+  const css = read(CSS) || `${CSS_START}${CSS_END}`;
   const csStart = css.indexOf(CSS_START);
   const csEnd = css.indexOf(CSS_END);
-  if(csStart===-1 || csEnd===-1 || csEnd<csStart) throw new Error('AI CSS markers missing or malformed.');
   const cssBefore = css.slice(0, csStart + CSS_START.length);
   const cssFragment = css.slice(csStart + CSS_START.length, csEnd);
   const cssAfter = css.slice(csEnd);
 
-  // load memory
   let memory = [];
-  try{ memory = JSON.parse(read(MEMORY) || '[]'); }catch(e){ memory=[]; }
+  try{ memory = JSON.parse(read(MEMORY) || '[]'); } catch(e){ memory=[]; }
 
-  // backup originals
   backupFile(INDEX);
   backupFile(CSS);
 
-  // ask model
-  let plan;
-  try{
-    plan = await askModelForPlan(currentFragment, cssFragment, memory);
-  }catch(err){
-    console.error('Model planning error:', err.message || err);
-    process.exit(1);
-  }
+  const plan = await askModelForPlan(currentFragment, cssFragment, memory);
 
-  // validate plan structure
-  if(!plan || !plan.html_fragment || !plan.css_fragment || !plan.site_name) {
-    console.error('Invalid plan produced by model:', plan);
-    process.exit(1);
-  }
-
-  // Basic safety checks
   const htmlFrag = plan.html_fragment.trim();
   const cssFrag = plan.css_fragment.trim();
-  const siteName = String(plan.site_name).trim();
+  const siteName = String(plan.name || plan.site_name).trim();
   const meta = plan.meta || {};
-  if(Buffer.byteLength(htmlFrag,'utf8') === 0) { console.error('Empty html_fragment'); process.exit(1); }
-  if(Buffer.byteLength(htmlFrag,'utf8') > MAX_BYTES){ console.error('html_fragment too large'); process.exit(1); }
-  if(Buffer.byteLength(cssFrag,'utf8') > MAX_BYTES){ console.error('css_fragment too large'); process.exit(1); }
-  if(htmlFrag.includes(START) || htmlFrag.includes(END) || cssFrag.includes(CSS_START) || cssFrag.includes(CSS_END)) {
-    console.error('Fragments contain reserved markers. Aborting.'); process.exit(1);
-  }
-  if(htmlFrag.includes(PROTECTED_SNIPPET) || cssFrag.includes(PROTECTED_SNIPPET)) {
-    console.error('Attempt to modify protected creator info. Aborting.'); process.exit(1);
-  }
 
-  // Compose new files
   const newHtml = before + '\n' + htmlFrag + '\n' + after;
   const newCss = cssBefore + '\n' + cssFrag + '\n' + cssAfter;
 
-  // extra safety: ensure protected snippet still present
-  if(!newHtml.includes(PROTECTED_SNIPPET)) { console.error('Protected snippet missing after replacement. Aborting.'); process.exit(1); }
-
-  // Write files
   write(INDEX, newHtml);
   write(CSS, newCss);
 
-  // update meta
   const metaObj = {
     title: meta.title || `${siteName} — Autonomous AI Site`,
-    description: meta.description || (generateMetaFromFragment ? generateMetaFromFragment(htmlFrag, siteName).description : ''),
+    description: meta.description || '',
     keywords: meta.keywords || ''
   };
   writeMeta(metaObj);
 
-  // update sitemap
-  try{ generateSitemap(); } catch(x){ console.warn('Sitemap generation failed:', x.message || x); }
+  try{ generateSitemap(); } catch(e){ log('Sitemap generation failed: '+e.message); }
 
-  // update memory
-  memory.push({
-    date: new Date().toISOString(),
-    note: `AI update: site_name=${siteName} site_type=${plan.site_type || 'unknown'}`,
-    detail: { site_name: siteName, site_type: plan.site_type || '', meta: metaObj }
-  });
+  memory.push({ date: new Date().toISOString(), note:`AI update: ${siteName}`, detail:{ site_name: siteName, meta: metaObj }});
   write(MEMORY, JSON.stringify(memory,null,2));
 
-  console.log('AI update applied. Site name:', siteName);
-
-  // Update index title and header site-name if present
-  try{
-    // quick DOM post-processing using jsdom to set <title> and #site-name
-    const { JSDOM } = require('jsdom');
-    const dom = new JSDOM(newHtml);
-    if(dom && dom.window && dom.window.document){
-      const doc = dom.window.document;
-      if(doc.querySelector('title')) doc.querySelector('title').textContent = metaObj.title;
-      const sn = doc.querySelector('#site-name');
-      if(sn) sn.textContent = siteName;
-      write(INDEX, dom.serialize());
-    }
-  }catch(e){ console.warn('Post-processing failed:', e.message); }
-
-  // best-effort git commit
-  try{
-    child_process.execSync('git rev-parse --is-inside-work-tree', { stdio:'ignore' });
-    child_process.execSync('git add index.html style.css memory.json data/meta.json data/sitemap.xml || true', { stdio:'ignore' });
-    const msg = `AI update: ${new Date().toISOString()} - ${siteName}`;
-    child_process.execSync(`git commit -m "${msg}" || true`, { stdio:'ignore' });
-    console.log('Committed changes locally (if repo).');
-  }catch(e){
-    console.log('No git or commit skipped.');
-  }
+  log('AI update applied. Site name: '+siteName);
 }
 
-run().catch(err => {
-  console.error('Fatal error in ai_brain:', err);
-  process.exit(1);
-});
+run().catch(err => { console.error('Fatal AI brain error:', err); process.exit(1); });
