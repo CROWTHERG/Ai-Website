@@ -10,9 +10,15 @@
   <!-- Created by CrowtherTech -->
   <header>
     <h1 id="site-name">[Initializing…]</h1>
+    <p class="site-link"><a href="https://CrowtherTech.name.ng" target="_blank">CrowtherTech.name.ng</a></p>
   </header>
 
   <main id="ai-content">
+    <!-- AI Thinking Bar -->
+    <div id="ai-thinking-bar">
+      <div id="ai-progress"></div>
+    </div>
+
     <!-- AI-START --><!-- AI-END -->
   </main>
 
@@ -21,8 +27,20 @@
   </footer>
 
   <script>
-    // Auto-update year in footer
+    // Auto-update year
     document.getElementById('year').textContent = new Date().getFullYear();
+
+    // AI Thinking Bar Simulation
+    function simulateAIThinking() {
+      const bar = document.getElementById('ai-progress');
+      let width = 0;
+      setInterval(() => {
+        width += 2; // increase 2% every 0.1s
+        if(width > 100) width = 0;
+        bar.style.width = width + '%';
+      }, 100);
+    }
+    simulateAIThinking();
   </script>
 </body>
 </html>
