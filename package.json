@@ -1,7 +1,7 @@
 {
   "name": "autonomous-ai-full",
   "version": "1.0.0",
-  "description": "Autonomous AI website that evolves and generates pages, styles, and content.",
+  "description": "Fully autonomous AI website that evolves content, styling, pages, and favicon.",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -15,7 +15,6 @@
     "ws": "^8.15.0",
     "node-cron": "^3.0.2",
     "jsdom": "^22.1.0",
-    "cohere-ai": "^3.3.0",
     "openai": "^4.26.0"
   }
 }
