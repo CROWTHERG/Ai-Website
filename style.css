@@ -1,30 +1,39 @@
-/* CORE STYLES - DO NOT REMOVE PROTECTED CREATOR INFO
-   The AI may edit the CSS fragment marked below to change the look and feel.
-*/
-
-/* AI-CSS-START */
-:root {
-  --bg: #0b1b2b;
-  --text: #e6eef8;
-  --muted: #9fb0c8;
-  --accent: #6ee7b7;
-  --card: rgba(255,255,255,0.02);
+/* Basic site styles */
+body {
+  margin: 0;
+  font-family: Inter, system-ui, Arial, sans-serif;
+  background: linear-gradient(180deg, #0a0f1a, #071223);
+  color: #eaf6ff;
+  padding: 2rem;
 }
-body{
-  margin:0;
-  padding:2rem;
-  font-family:Inter,system-ui,Arial,sans-serif;
-  background:linear-gradient(180deg,#051021 0%,#0b1b2b 100%);
-  color:var(--text);
-}
-header { margin-bottom:1rem; }
-#creator-info { background: rgba(255,255,255,0.02); padding:0.5rem 0.75rem; border-radius:8px; display:inline-block; font-size:0.9rem; color:var(--muted); }
-main { display:grid; gap:1rem; grid-template-columns:1fr 320px; align-items:start; }
-#ai-content { background:var(--card); padding:1rem; border-radius:12px; box-shadow:0 6px 20px rgba(2,6,12,0.6); }
-#log{background:rgba(255,255,255,0.01); padding:1rem;border-radius:12px;color:var(--muted);}
-h2{color:var(--accent);margin-top:0}
-footer{margin-top:2rem;color:var(--muted);font-size:0.9rem}
-@media (max-width:800px){main{grid-template-columns:1fr}}
-/* AI-CSS-END */
 
-/* END CORE */
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+#site-name {
+  font-weight: 700;
+  font-size: 2.5rem;
+  letter-spacing: 0.6px;
+}
+
+main#ai-content {
+  background: rgba(255, 255, 255, 0.02);
+  padding: 2rem;
+  border-radius: 10px;
+  max-width: 900px;
+  margin: 0 auto 3rem auto;
+}
+
+footer {
+  text-align: center;
+  margin-top: 3rem;
+  font-size: 0.9rem;
+  color: #9ef7d3;
+}
+
+/* AI CSS region */
+ /* AI-CSS-START */
+ /* AI will replace this section */
+ /* AI-CSS-END */
