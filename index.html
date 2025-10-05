@@ -3,55 +3,60 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Autonomous AI</title>
+<title>Initializing…</title>
+<link rel="icon" href="favicon.ico">
 <link rel="stylesheet" href="style.css">
-  <link id="favicon-link" rel="icon" href="favicon.ico">
 </head>
 <body>
 <header>
-  <h1 id="site-name"></h1>
-  <p class="site-link"><a href="https://CrowtherTech.name.ng" target="_blank">CrowtherTech.name.ng</a></p>
+  <h1 id="site-name">Initializing…</h1>
 </header>
-<main id="ai-content">
-  <div id="ai-thinking-container">
-    <p><strong>AI is thinking:</strong></p>
-    <pre id="ai-thinking"></pre>
+
+<section id="ai-content">
+  <!-- AI-START -->
+  <p>Loading AI content...</p>
+  <!-- AI-END -->
+</section>
+
+<section id="ai-thinking">
+  <strong>AI is thinking:</strong>
+  <div id="thinking-bar">
+    <span id="thinking-text">…</span>
   </div>
-  <!-- AI-START --><!-- AI-END -->
-  <div id="visitor-stats">
-    <p>People online now: <span id="online-count">0</span></p>
-    <p>Total visitors: <span id="total-count">0</span></p>
-  </div>
-</main>
-<footer>
-<p>© <span id="year"></span> CrowtherTech. All rights reserved.</p>
-</footer>
+</section>
+
+<section id="visitors">
+  <strong>Visitors:</strong>
+  <p>Online: <span id="online-count">0</span> | Total: <span id="total-count">0</span></p>
+</section>
+
+<footer>© 2025 <a href="https://CrowtherTech.name.ng" target="_blank">CrowtherTech</a>. All rights reserved.</footer>
 
 <script>
-document.getElementById('year').textContent = new Date().getFullYear();
+  // --- WebSocket for AI thinking ---
+  const ws = new WebSocket(`ws://${location.host}`);
+  const thinkingText = document.getElementById('thinking-text');
 
-// --- Visitors ---
-async function updateVisitorStats() {
-  try{
-    const res = await fetch('/api/visitors');
-    const data = await res.json();
-    document.getElementById('online-count').textContent = data.online;
-    document.getElementById('total-count').textContent = data.total;
-  }catch(e){ console.error(e); }
-}
-setInterval(updateVisitorStats,5000);
-updateVisitorStats();
+  ws.onmessage = (event)=>{
+    try{
+      const data = JSON.parse(event.data);
+      if(data.type==='thinking') {
+        thinkingText.textContent = data.text;
+      }
+    }catch(e){}
+  };
 
-// --- WebSocket AI stream ---
-const thinking = document.getElementById('ai-thinking');
-const ws = new WebSocket(`ws://${location.host}`);
-ws.onmessage = e=>{
-  const msg = JSON.parse(e.data);
-  if(msg.type==='thinking'){
-    thinking.textContent += msg.text + '\n';
-    thinking.scrollTop = thinking.scrollHeight;
+  // --- Live visitor counter ---
+  async function updateVisitors(){
+    try{
+      const res = await fetch('/api/visitors');
+      const data = await res.json();
+      document.getElementById('online-count').textContent = data.online;
+      document.getElementById('total-count').textContent = data.total;
+    }catch(e){}
   }
-};
+  setInterval(updateVisitors, 2000);
+  updateVisitors();
 </script>
 </body>
 </html>
