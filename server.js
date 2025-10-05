@@ -32,25 +32,19 @@ app.use(express.static(__dirname));
 // --- Visitor tracking ---
 app.get('/api/visitors', async (req,res)=>{
   try {
-    // increment total visitors if new session
     if(!req.session.visited){
       req.session.visited = true;
       await redisClient.incr('totalVisitors');
     }
-
-    // Count online sessions (approximation)
     const total = await redisClient.get('totalVisitors') || 0;
     const online = await redisClient.keys('sess:*').then(keys => keys.length);
-
     res.json({ total, online });
   } catch(e){ res.json({ total:0, online:0 }); }
 });
 
 // --- WebSocket for AI thinking ---
 const wss = new WebSocketServer({ noServer: true });
-wss.on('connection', ws => {
-  console.log('Client connected to AI WebSocket');
-});
+wss.on('connection', ws => console.log('Client connected to AI WebSocket'));
 
 // --- Trigger AI ---
 const AI_SCRIPT = path.join(__dirname,'ai_brain.js');
@@ -59,7 +53,6 @@ async function runAI() {
   const child = spawn('node',[AI_SCRIPT],{cwd:__dirname});
   child.stdout.on('data', data => {
     const text = data.toString();
-    // Broadcast to all websocket clients
     wss.clients.forEach(client => {
       if(client.readyState === 1) client.send(JSON.stringify({ type:'thinking', text }));
     });
