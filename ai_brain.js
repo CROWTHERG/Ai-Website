@@ -1,4 +1,4 @@
-// ai_brain.js - Autonomous AI brain
+// ai_brain.js - Autonomous AI brain (Render-ready)
 const fs = require('fs');
 const path = require('path');
 const child_process = require('child_process');
@@ -98,16 +98,21 @@ Recent memory:
 ${recent}
 `;
 
-  if(COHERE_KEY){
-    const raw = await callCohere(prompt);
-    const jsonText = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}')+1);
-    return JSON.parse(jsonText);
-  } else if(OPENAI_KEY){
-    const raw = await callOpenAI(prompt);
-    const jsonText = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}')+1);
-    return JSON.parse(jsonText);
-  } else {
-    log('No AI keys set; falling back to simulation.');
+  try{
+    if(COHERE_KEY){
+      const raw = await callCohere(prompt);
+      const jsonText = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}')+1);
+      return JSON.parse(jsonText);
+    } else if(OPENAI_KEY){
+      const raw = await callOpenAI(prompt);
+      const jsonText = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}')+1);
+      return JSON.parse(jsonText);
+    } else {
+      log('No AI keys set; falling back to simulation.');
+      return simulatePlan(currentFragment, cssFragment, memory);
+    }
+  }catch(e){
+    log('AI model call failed; using simulation fallback.');
     return simulatePlan(currentFragment, cssFragment, memory);
   }
 }
@@ -115,22 +120,28 @@ ${recent}
 // --- Main run ---
 async function run(){
   log('Starting AI brain run...');
-  const html = read(INDEX);
-  if(!html){ log('index.html not found. Creating default.'); write(INDEX, `<!DOCTYPE html><html><head><title>Autonomous AI</title></head><body><!-- AI-START --><!-- AI-END --></body></html>`); }
 
-  const htmlContent = read(INDEX);
-  if(!htmlContent.includes(PROTECTED_SNIPPET)){
-    log('Protected snippet missing; adding it.');
-    write(INDEX, `<!-- ${PROTECTED_SNIPPET} -->\n${htmlContent}`);
+  let html = read(INDEX);
+  if(!html){
+    log('index.html not found. Creating default.');
+    html = `<!DOCTYPE html><html><head><title>Autonomous AI</title></head><body><!-- AI-START --><!-- AI-END --></body></html>`;
+    write(INDEX, html);
   }
 
-  const s = htmlContent.indexOf(START);
-  const e = htmlContent.indexOf(END);
-  const before = htmlContent.slice(0, s + START.length);
-  const currentFragment = htmlContent.slice(s + START.length, e);
-  const after = htmlContent.slice(e);
+  // Ensure protected snippet
+  if(!html.includes(PROTECTED_SNIPPET)){
+    log('Protected snippet missing; adding it.');
+    write(INDEX, `<!-- ${PROTECTED_SNIPPET} -->\n${html}`);
+    html = read(INDEX);
+  }
 
-  const css = read(CSS) || `${CSS_START}${CSS_END}`;
+  const s = html.indexOf(START);
+  const e = html.indexOf(END);
+  const before = html.slice(0, s + START.length);
+  const currentFragment = html.slice(s + START.length, e);
+  const after = html.slice(e);
+
+  let css = read(CSS) || `${CSS_START}${CSS_END}`;
   const csStart = css.indexOf(CSS_START);
   const csEnd = css.indexOf(CSS_END);
   const cssBefore = css.slice(0, csStart + CSS_START.length);
@@ -145,9 +156,10 @@ async function run(){
 
   const plan = await askModelForPlan(currentFragment, cssFragment, memory);
 
-  const htmlFrag = plan.html_fragment.trim();
-  const cssFrag = plan.css_fragment.trim();
-  const siteName = String(plan.name || plan.site_name).trim();
+  // --- Normalize keys to handle simulation mode ---
+  const htmlFrag = (plan.html_fragment || plan.fragment || '').trim();
+  const cssFrag  = (plan.css_fragment  || plan.css || '').trim();
+  const siteName = String(plan.site_name || plan.name || 'Autonomous-AI').trim();
   const meta = plan.meta || {};
 
   const newHtml = before + '\n' + htmlFrag + '\n' + after;
@@ -158,14 +170,18 @@ async function run(){
 
   const metaObj = {
     title: meta.title || `${siteName} — Autonomous AI Site`,
-    description: meta.description || '',
+    description: meta.description || (generateMetaFromFragment ? generateMetaFromFragment(htmlFrag, siteName).description : ''),
     keywords: meta.keywords || ''
   };
   writeMeta(metaObj);
 
   try{ generateSitemap(); } catch(e){ log('Sitemap generation failed: '+e.message); }
 
-  memory.push({ date: new Date().toISOString(), note:`AI update: ${siteName}`, detail:{ site_name: siteName, meta: metaObj }});
+  memory.push({
+    date: new Date().toISOString(),
+    note:`AI update: ${siteName}`,
+    detail:{ site_name: siteName, meta: metaObj }
+  });
   write(MEMORY, JSON.stringify(memory,null,2));
 
   log('AI update applied. Site name: '+siteName);
