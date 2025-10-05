@@ -1,118 +1,86 @@
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const { spawn } = require('child_process');
-const cron = require('node-cron');
-const session = require('express-session');
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import session from 'express-session';
+import { createClient } from 'redis';
+import connectRedis from 'connect-redis';
+import { WebSocketServer } from 'ws';
+import { spawn } from 'child_process';
+import cron from 'node-cron';
+
+const __dirname = path.resolve();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
-const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 0 * * *';
-const LOG_DIR = path.join(process.cwd(), 'logs');
-const LOG_FILE = path.join(LOG_DIR, 'ai.log');
-const AI_SCRIPT = path.join(process.cwd(), 'ai_brain.js');
-const VISITS_FILE = path.join(process.cwd(),'data','visits.json');
 
-if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
-if (!fs.existsSync(path.dirname(VISITS_FILE))) fs.mkdirSync(path.dirname(VISITS_FILE), { recursive:true });
+// --- Redis session setup ---
+const RedisStore = connectRedis(session);
+const redisClient = createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' });
+await redisClient.connect().catch(console.error);
 
-function appendLog(text){
-  const stamp = new Date().toISOString();
-  fs.appendFileSync(LOG_FILE, `[${stamp}] ${text}\n`);
-}
-
-// --- Middleware for sessions ---
 app.use(session({
+  store: new RedisStore({ client: redisClient }),
   secret: process.env.SESSION_SECRET || 'autonomous-ai-secret',
   resave: false,
   saveUninitialized: true,
-  cookie: { maxAge: 5 * 60 * 1000 } // 5 minutes = "online"
+  cookie: { maxAge: 3600 * 1000 }
 }));
 
-// Track visits
-let totalVisits = 0;
-try{
-  const data = fs.readFileSync(VISITS_FILE,'utf8');
-  totalVisits = JSON.parse(data).total || 0;
-}catch(e){ totalVisits = 0; }
+// --- Serve static files ---
+app.use(express.static(__dirname));
 
-const onlineUsers = new Set();
+// --- Visitor tracking ---
+app.get('/api/visitors', async (req,res)=>{
+  try {
+    // increment total visitors if new session
+    if(!req.session.visited){
+      req.session.visited = true;
+      await redisClient.incr('totalVisitors');
+    }
 
-// Middleware to track visits
-app.use((req,res,next)=>{
-  if(req.session){
-    onlineUsers.add(req.session.id);
-    req.session.touch();
-  }
-  if(req.session && !req.session.hasVisited){
-    req.session.hasVisited = true;
-    totalVisits++;
-    fs.writeFileSync(VISITS_FILE, JSON.stringify({ total: totalVisits }, null, 2));
-  }
-  next();
+    // Count online sessions (approximation)
+    const total = await redisClient.get('totalVisitors') || 0;
+    const online = await redisClient.keys('sess:*').then(keys => keys.length);
+
+    res.json({ total, online });
+  } catch(e){ res.json({ total:0, online:0 }); }
 });
 
-// Serve static files
-app.use(express.static(process.cwd()));
+// --- WebSocket for AI thinking ---
+const wss = new WebSocketServer({ noServer: true });
+wss.on('connection', ws => {
+  console.log('Client connected to AI WebSocket');
+});
 
-// Health check
-app.get('/health', (req,res)=> res.json({status:'ok', timestamp:new Date().toISOString()}));
-
-// Visitor stats API
-app.get('/api/visitors', (req,res)=>{
-  res.json({
-    online: onlineUsers.size,
-    total: totalVisits
+// --- Trigger AI ---
+const AI_SCRIPT = path.join(__dirname,'ai_brain.js');
+async function runAI() {
+  if(!fs.existsSync(AI_SCRIPT)) return console.error('ai_brain.js missing');
+  const child = spawn('node',[AI_SCRIPT],{cwd:__dirname});
+  child.stdout.on('data', data => {
+    const text = data.toString();
+    // Broadcast to all websocket clients
+    wss.clients.forEach(client => {
+      if(client.readyState === 1) client.send(JSON.stringify({ type:'thinking', text }));
+    });
+    console.log('[AI]', text.trim());
   });
-});
-
-// Log viewer
-app.get('/logs', (req,res)=>{
-  if(!fs.existsSync(LOG_FILE)) return res.send('No logs yet.');
-  const data = fs.readFileSync(LOG_FILE,'utf8');
-  const lines = data.trim().split('\n');
-  res.type('text/plain').send(lines.slice(-200).join('\n'));
-});
-
-// Trigger AI run (GET or POST)
-app.all(['/run-ai','/run'], async (req,res)=>{
-  const token = (req.headers['x-admin-token'] || req.query.token || '').toString();
-  if(!ADMIN_TOKEN || token !== ADMIN_TOKEN) return res.status(401).json({error:'Unauthorized'});
-  appendLog('Manual AI run triggered.');
-  try{
-    const result = await runAIProcess();
-    res.json({ok:true, output: result.stdout.slice(-10000), exitCode: result.code});
-  }catch(e){
-    appendLog('Manual run error: '+e);
-    res.status(500).json({ok:false, error:e.message});
-  }
-});
-
-// Run ai_brain.js
-function runAIProcess(){
-  return new Promise((resolve,reject)=>{
-    if(!fs.existsSync(AI_SCRIPT)) return reject(new Error('ai_brain.js missing'));
-    const child = spawn(process.execPath,[AI_SCRIPT],{env:process.env,cwd:process.cwd()});
-    let stdout=''; let stderr='';
-    child.stdout.on('data', d=>{stdout+=d.toString(); appendLog('[stdout] '+d.toString().replace(/\n/g,'\\n'));});
-    child.stderr.on('data', d=>{stderr+=d.toString(); appendLog('[stderr] '+d.toString().replace(/\n/g,'\\n'));});
-    child.on('close', code=>{appendLog('AI process exited '+code); resolve({code, stdout, stderr});});
-    child.on('error', err=>reject(err));
-  });
+  child.stderr.on('data', data => console.error('[AI ERR]', data.toString()));
+  child.on('exit', code => console.log('[AI] exited with', code));
 }
 
-// Start server
-const server = app.listen(PORT, ()=>{
-  appendLog(`Server running on port ${PORT}`);
-  // schedule daily AI run
-  cron.schedule(CRON_SCHEDULE, ()=>{
-    appendLog('Scheduled AI run started');
-    runAIProcess().catch(e=>appendLog('Scheduled AI run error: '+e));
-  },{scheduled:true, timezone:'UTC'});
-  // optional first run
-  runAIProcess().catch(e=>appendLog('Initial AI run error: '+e));
+// --- Cron for autonomous updates ---
+cron.schedule('0 0 * * *', () => { runAI(); }, { timezone:'UTC' });
+
+// --- First AI run ---
+runAI();
+
+// --- Upgrade HTTP server for WebSocket ---
+const server = app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
+server.on('upgrade', (request, socket, head)=>{
+  wss.handleUpgrade(request, socket, head, ws => wss.emit('connection', ws, request));
 });
 
+// Graceful shutdown
 process.on('SIGINT', ()=>server.close(()=>process.exit(0)));
 process.on('SIGTERM', ()=>server.close(()=>process.exit(0)));
