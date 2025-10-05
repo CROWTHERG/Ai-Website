@@ -1,86 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Autonomous AI</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autonomous AI</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Created by CrowtherTech -->
-  <header>
-    <h1 id="site-name">[Initializing…]</h1>
-    <p class="site-link"><a href="https://CrowtherTech.name.ng" target="_blank">CrowtherTech.name.ng</a></p>
-  </header>
+<header>
+  <h1 id="site-name"></h1>
+  <p class="site-link"><a href="https://CrowtherTech.name.ng" target="_blank">CrowtherTech.name.ng</a></p>
+</header>
+<main id="ai-content">
+  <div id="ai-thinking-container">
+    <p><strong>AI is thinking:</strong></p>
+    <pre id="ai-thinking"></pre>
+  </div>
+  <!-- AI-START --><!-- AI-END -->
+  <div id="visitor-stats">
+    <p>People online now: <span id="online-count">0</span></p>
+    <p>Total visitors: <span id="total-count">0</span></p>
+  </div>
+</main>
+<footer>
+<p>© <span id="year"></span> CrowtherTech. All rights reserved.</p>
+</footer>
 
-  <main id="ai-content">
-    <!-- AI Thinking Area -->
-    <div id="ai-thinking-container">
-      <p><strong>AI is thinking:</strong></p>
-      <pre id="ai-thinking"></pre>
-    </div>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
 
-    <!-- AI-START --><!-- AI-END -->
+// --- Visitors ---
+async function updateVisitorStats() {
+  try{
+    const res = await fetch('/api/visitors');
+    const data = await res.json();
+    document.getElementById('online-count').textContent = data.online;
+    document.getElementById('total-count').textContent = data.total;
+  }catch(e){ console.error(e); }
+}
+setInterval(updateVisitorStats,5000);
+updateVisitorStats();
 
-    <!-- Visitor Stats -->
-    <div id="visitor-stats">
-      <p>People online now: <span id="online-count">0</span></p>
-      <p>Total visitors: <span id="total-count">0</span></p>
-    </div>
-  </main>
-
-  <footer>
-    <p>© <span id="year"></span> CrowtherTech. All rights reserved.</p>
-  </footer>
-
-  <script>
-    // Auto-update year
-    document.getElementById('year').textContent = new Date().getFullYear();
-
-    // --- Visitor stats ---
-    async function updateVisitorStats() {
-      try {
-        const res = await fetch('/api/visitors');
-        const data = await res.json();
-        document.getElementById('online-count').textContent = data.online;
-        document.getElementById('total-count').textContent = data.total;
-      } catch(e){ console.error(e); }
-    }
-    setInterval(updateVisitorStats, 5000);
-    updateVisitorStats();
-
-    // --- AI thinking simulation ---
-    const thinkingElement = document.getElementById('ai-thinking');
-
-    function simulateAIThinking() {
-      const thoughts = [
-        "Analyzing site structure...",
-        "Generating unique content...",
-        "Optimizing layout and colors...",
-        "Creating interactive elements...",
-        "Considering previous updates...",
-        "Adding metadata for SEO...",
-        "Styling for readability and elegance..."
-      ];
-      let i = 0;
-      function typeNext() {
-        if(i >= thoughts.length) i = 0;
-        const text = thoughts[i];
-        let j = 0;
-        thinkingElement.textContent = '';
-        const interval = setInterval(()=>{
-          thinkingElement.textContent += text[j];
-          j++;
-          if(j >= text.length){
-            clearInterval(interval);
-            setTimeout(typeNext, 700); // pause before next thought
-          }
-        }, 50);
-        i++;
-      }
-      typeNext();
-    }
-    simulateAIThinking();
-  </script>
+// --- WebSocket AI stream ---
+const thinking = document.getElementById('ai-thinking');
+const ws = new WebSocket(`ws://${location.host}`);
+ws.onmessage = e=>{
+  const msg = JSON.parse(e.data);
+  if(msg.type==='thinking'){
+    thinking.textContent += msg.text + '\n';
+    thinking.scrollTop = thinking.scrollHeight;
+  }
+};
+</script>
 </body>
 </html>
