@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Initializing…</title>
-<link rel="icon" href="favicon.ico">
+<link rel="icon" href="assets/favicon.ico" type="image/x-icon">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,50 +12,46 @@
   <h1 id="site-name">Initializing…</h1>
 </header>
 
-<section id="ai-content">
-  <!-- AI-START -->
-  <p>Loading AI content...</p>
-  <!-- AI-END -->
-</section>
-
-<section id="ai-thinking">
-  <strong>AI is thinking:</strong>
-  <div id="thinking-bar">
-    <span id="thinking-text">…</span>
+<main>
+  <div id="ai-content">
+    <!-- AI-START -->
+    <article id="ai-article">
+      <p>Welcome! The AI is starting…</p>
+    </article>
+    <!-- AI-END -->
+    <p><strong>AI Thinking:</strong> <span id="thinking-text">Loading...</span></p>
   </div>
-</section>
 
-<section id="visitors">
-  <strong>Visitors:</strong>
-  <p>Online: <span id="online-count">0</span> | Total: <span id="total-count">0</span></p>
-</section>
+  <div id="visitors">
+    <p>Online visitors: <span id="online-count">0</span></p>
+    <p>Total visitors: <span id="total-count">0</span></p>
+  </div>
+</main>
 
-<footer>© 2025 <a href="https://CrowtherTech.name.ng" target="_blank">CrowtherTech</a>. All rights reserved.</footer>
+<footer>
+  <p>© 2025 <a href="https://CrowtherTech.name.ng">CrowtherTech</a>. All rights reserved.</p>
+</footer>
 
 <script>
-  // --- WebSocket for AI thinking ---
+  // WebSocket for AI thinking
   const ws = new WebSocket(`ws://${location.host}`);
-  const thinkingText = document.getElementById('thinking-text');
-
-  ws.onmessage = (event)=>{
+  ws.onmessage = (e)=>{
     try{
-      const data = JSON.parse(event.data);
-      if(data.type==='thinking') {
-        thinkingText.textContent = data.text;
-      }
-    }catch(e){}
+      const msg = JSON.parse(e.data);
+      if(msg.type==='thinking') document.getElementById('thinking-text').textContent = msg.text;
+    }catch{}
   };
 
-  // --- Live visitor counter ---
+  // Poll visitors every 3 seconds
   async function updateVisitors(){
     try{
       const res = await fetch('/api/visitors');
       const data = await res.json();
       document.getElementById('online-count').textContent = data.online;
       document.getElementById('total-count').textContent = data.total;
-    }catch(e){}
+    }catch{}
   }
-  setInterval(updateVisitors, 2000);
+  setInterval(updateVisitors,3000);
   updateVisitors();
 </script>
 </body>
