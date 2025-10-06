@@ -1,44 +1,50 @@
-/* AI-CSS-START */
+/* Global styles */
 body {
-  background: linear-gradient(180deg,#0a0f1a,#071223);
-  color: #eaf6ff;
-  font-family: Inter,system-ui,Arial,sans-serif;
-  padding: 2rem;
   margin: 0;
+  padding: 0;
+  background: #111;
+  color: #eaf6ff;
+  font-family: Inter, system-ui, Arial, sans-serif;
+  line-height: 1.6;
 }
+
 header, footer {
-  padding: 1rem;
   text-align: center;
+  padding: 1rem 0;
 }
+
+a {
+  color: #9ef7d3;
+  text-decoration: none;
+}
+
+main {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+/* AI-CSS-START */
+/* This region is dynamically updated by ai_brain.js */
+/* Example initial AI style */
 #site-name {
   font-weight: 700;
+  font-size: 2rem;
   letter-spacing: 0.6px;
 }
+
 #ai-content {
   background: rgba(255,255,255,0.02);
   padding: 1rem;
   border-radius: 10px;
-  margin: 1rem 0;
+  margin-bottom: 2rem;
 }
-#ai-thinking {
-  margin: 1rem 0;
-  padding: 0.5rem;
-  background: rgba(158,247,211,0.1);
-  border-radius: 8px;
-}
-#thinking-bar {
-  font-style: italic;
+
+#ai-content article h2 {
   color: #9ef7d3;
 }
-#visitors {
-  margin: 1rem 0;
-  padding: 0.5rem;
-  background: rgba(255,255,255,0.05);
-  border-radius: 8px;
-}
-article img {
-  max-width: 100%;
-  border-radius: 10px;
-  margin-top: 1rem;
+
+#ai-content article p {
+  margin: 0.5rem 0;
 }
 /* AI-CSS-END */
