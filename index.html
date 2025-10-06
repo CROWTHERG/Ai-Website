@@ -1,47 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Autonomous AI Site</title>
-<link rel="icon" href="assets/favicon.ico" type="image/x-icon">
-<link rel="stylesheet" href="style.css">
+  <title>Initializing Aurora AI</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main>
-  <div id="ai-content">
-    <!-- AI-START -->
-    <!-- AI content will appear here -->
-    <!-- AI-END -->
-  </div>
-  <p><strong>AI Thinking:</strong> <span id="thinking-text"></span></p>
-</main>
+  <h1>[Initializing Aurora AI]</h1>
+  <div id="thinking">AI Thinking...</div>
+  <footer>© 2025 CrowtherTech. All rights reserved.</footer>
 
-<footer>
-  <p>© 2025 <a href="https://CrowtherTech.name.ng">CrowtherTech</a>. All rights reserved.</p>
-</footer>
-
-<script>
-const ws = new WebSocket(`ws://${location.host}`);
-ws.onmessage = (e) => {
-  try {
-    const msg = JSON.parse(e.data);
-    if(msg.type === 'thinking'){
-      const span = document.getElementById('thinking-text');
-      span.textContent = msg.text;
-    }
-    if(msg.type === 'update'){
-      fetch(location.href)
-        .then(r=>r.text())
-        .then(html=>{
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html,'text/html');
-          const newContent = doc.querySelector('#ai-content');
-          if(newContent) document.querySelector('#ai-content').replaceWith(newContent);
-        });
-    }
-  } catch(err) { console.error(err); }
-};
-</script>
+  <script>
+    const ws = new WebSocket(`wss://${location.host}`);
+    ws.onmessage = e => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "thinking") {
+        document.getElementById("thinking").innerText = msg.text;
+      } else if (msg.type === "update") {
+        location.reload();
+      }
+    };
+  </script>
 </body>
 </html>

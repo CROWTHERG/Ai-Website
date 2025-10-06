@@ -1,53 +1,82 @@
-import express from 'express';
-import path from 'path';
-import { spawn } from 'child_process';
-import cron from 'node-cron';
-import { WebSocketServer } from 'ws';
-import fs from 'fs';
+// server.js — autonomous free-will AI website manager
+import express from "express";
+import path from "path";
+import fs from "fs";
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
+import cron from "node-cron";
+import { WebSocketServer } from "ws";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
-const AI_SCRIPT = path.join(process.cwd(), 'ai_brain.js');
+const AI_SCRIPT = path.join(__dirname, "ai_brain.js");
+const LOG_FILE = path.join(__dirname, "logs.txt");
 
-app.use(express.static(process.cwd()));
-
-// WebSocket for live AI Thinking
-const wss = new WebSocketServer({ noServer: true });
-let clients = [];
-wss.on('connection', ws => {
-  clients.push(ws);
-  ws.on('close', () => { clients = clients.filter(c=>c!==ws); });
-});
-
-function broadcastThinking(text){
-  const msg = JSON.stringify({ type:'thinking', text });
-  clients.forEach(ws => ws.readyState===1 && ws.send(msg));
+// ---------- Utility ----------
+function log(msg) {
+  const stamp = new Date().toISOString();
+  fs.appendFileSync(LOG_FILE, `[${stamp}] ${msg}\n`);
+  console.log(msg);
 }
 
-// Run AI process
-function runAIProcess(){
-  return new Promise((resolve,reject)=>{
-    const child = spawn(process.execPath, [AI_SCRIPT], { cwd: process.cwd() });
-    child.stdout.on('data', d => {
-      const lines = d.toString().split('\n');
-      lines.forEach(line=>{ if(line.trim()) broadcastThinking(line.trim()); });
+function runAI() {
+  return new Promise((resolve, reject) => {
+    const child = spawn("node", [AI_SCRIPT], { cwd: __dirname });
+    let output = "";
+    child.stdout.on("data", (data) => {
+      const text = data.toString();
+      output += text;
+      broadcastThinking(text);
+      log(`[AI] ${text.trim()}`);
     });
-    child.stderr.on('data', d => console.error(d.toString()));
-    child.on('close', code => resolve(code));
-    child.on('error', err => reject(err));
+    child.stderr.on("data", (data) => {
+      const err = data.toString();
+      log(`[ERR] ${err}`);
+    });
+    child.on("close", (code) => {
+      log(`AI process exited with code ${code}`);
+      resolve(output);
+    });
   });
 }
 
-// Auto update every 3 hours
-cron.schedule('0 */3 * * *', () => {
-  console.log('Scheduled AI run started');
-  runAIProcess().catch(console.error);
+// ---------- WebSocket: Live Thinking ----------
+const server = app.listen(PORT, () => {
+  log(`Server running on port ${PORT}`);
+  log("Initial AI run starting...");
+  runAI().then(() => log("First AI run done."));
 });
 
-// Initial run
-runAIProcess().catch(console.error);
+const wss = new WebSocketServer({ server });
+const clients = new Set();
 
-const server = app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
-server.on('upgrade', (req, socket, head) => {
-  wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
+wss.on("connection", (ws) => {
+  clients.add(ws);
+  ws.send("🤖 AI Connected — watching real-time thoughts...");
+  ws.on("close", () => clients.delete(ws));
+});
+
+function broadcastThinking(text) {
+  for (const ws of clients) {
+    try {
+      ws.send(`🤔 ${text.trim()}`);
+    } catch {}
+  }
+}
+
+// ---------- Serve Files ----------
+app.use(express.static(__dirname));
+
+// ---------- Manual Trigger ----------
+app.get("/run-ai", async (req, res) => {
+  log("Manual AI trigger");
+  const out = await runAI();
+  res.type("text/plain").send(out.slice(-1000));
+});
+
+// ---------- Auto Schedule (every 3 hours) ----------
+cron.schedule("0 */3 * * *", () => {
+  log("⏰ 3-hour AI auto-update triggered");
+  runAI();
 });
