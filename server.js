@@ -1,5 +1,4 @@
 import express from 'express';
-import session from 'express-session';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
@@ -18,33 +17,10 @@ const LOG_DIR = path.join(__dirname,'logs');
 if(!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR,{recursive:true});
 const LOG_FILE = path.join(LOG_DIR,'ai.log');
 
-// ----------------- Visitor tracking -----------------
-let totalVisitors = 0;
-let onlineSessions = new Set();
-
-app.use(session({
-  secret: 'supersecretkey',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { maxAge: 24*60*60*1000 }
-}));
-
-app.use((req,res,next)=>{
-  if(!req.session.counted){
-    totalVisitors++;
-    req.session.counted = true;
-  }
-  onlineSessions.add(req.sessionID);
-  res.on('finish', ()=> onlineSessions.delete(req.sessionID));
-  next();
-});
-
-app.get('/api/visitors', (req,res)=>{
-  res.json({ online: onlineSessions.size, total: totalVisitors });
-});
-
 // ----------------- WebSocket for AI thinking -----------------
-const server = app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
+const server = app.listen(PORT, ()=>{
+  console.log(`Server running on port ${PORT}`);
+});
 const wss = new WebSocketServer({ server });
 
 function broadcastThinking(text){
@@ -98,14 +74,14 @@ app.all(['/run-ai','/run'], async (req,res)=>{
   }
 });
 
-// ----------------- Scheduled daily AI run -----------------
+// ----------------- Schedule daily AI run -----------------
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 0 * * *';
 cron.schedule(CRON_SCHEDULE, ()=>{
   appendLog('Scheduled AI run started');
   runAIProcess().catch(e=>appendLog('Scheduled AI run error: '+e));
 },{timezone:'UTC'});
 
-// ----------------- Serve static files -----------------
+// ----------------- Serve static site -----------------
 app.use(express.static(__dirname));
 
 // ----------------- Health check -----------------
