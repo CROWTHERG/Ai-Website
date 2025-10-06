@@ -49,10 +49,10 @@ async function streamThinking(lines){
   for(const line of lines){
     for(const word of line.split(' ')){
       process.stdout.write(word+' ');
-      await new Promise(r=>setTimeout(r,100));
+      await new Promise(r=>setTimeout(r,80));
     }
     process.stdout.write('\n');
-    await new Promise(r=>setTimeout(r,200));
+    await new Promise(r=>setTimeout(r,150));
   }
 }
 

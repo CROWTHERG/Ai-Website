@@ -17,9 +17,7 @@ const LOG_DIR = path.join(__dirname,'logs');
 if(!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR,{recursive:true});
 const LOG_FILE = path.join(LOG_DIR,'ai.log');
 
-const server = app.listen(PORT, ()=>{
-  console.log(`Server running on port ${PORT}`);
-});
+const server = app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
 const wss = new WebSocketServer({ server });
 
 function broadcast(type,text){
@@ -51,12 +49,14 @@ function runAIProcess(){
     child.on('close', code=>{
       appendLog('AI process exited '+code);
       resolve({code});
+      broadcast('update','Site updated by AI');
     });
 
     child.on('error', err=>reject(err));
   });
 }
 
+// Manual trigger
 app.all(['/run-ai','/run'], async (req,res)=>{
   const token = (req.headers['x-admin-token'] || req.query.token || '');
   if(token!==ADMIN_TOKEN) return res.status(401).json({error:'Unauthorized'});
@@ -70,12 +70,14 @@ app.all(['/run-ai','/run'], async (req,res)=>{
   }
 });
 
+// Schedule daily run
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 0 * * *';
 cron.schedule(CRON_SCHEDULE, ()=>{
   appendLog('Scheduled AI run started');
   runAIProcess().catch(e=>appendLog('Scheduled AI run error: '+e));
 },{timezone:'UTC'});
 
+// Serve site
 app.use(express.static(__dirname));
 
 app.get('/health', (req,res)=>res.json({status:'ok', timestamp:new Date().toISOString()}));
