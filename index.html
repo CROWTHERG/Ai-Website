@@ -3,24 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Initializing…</title>
+<title>Autonomous AI Site</title>
 <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
-  <h1 id="site-name">Initializing…</h1>
+  <h1 id="site-name"></h1>
 </header>
 
 <main>
   <div id="ai-content">
     <!-- AI-START -->
-    <article id="ai-article">
-      <p>Welcome! The AI is starting…</p>
-    </article>
+    <!-- AI will generate content here -->
     <!-- AI-END -->
-    <p><strong>AI Thinking:</strong> <span id="thinking-text">Loading...</span></p>
   </div>
+  <p><strong>AI Thinking:</strong> <span id="thinking-text"></span></p>
 </main>
 
 <footer>
@@ -28,30 +26,31 @@
 </footer>
 
 <script>
-  // WebSocket for live AI thinking updates
-  const ws = new WebSocket(`ws://${location.host}`);
-  ws.onopen = ()=>console.log('Connected to AI server');
+const ws = new WebSocket(`ws://${location.host}`);
+ws.onopen = ()=>console.log('Connected to AI server');
 
-  ws.onmessage = (e)=>{
-    try{
-      const msg = JSON.parse(e.data);
-      if(msg.type==='thinking'){
-        const thinkingEl = document.getElementById('thinking-text');
-        thinkingEl.textContent = msg.text;
-      }
-      if(msg.type==='update'){
-        // reload page content when AI finishes
-        fetch(location.href)
-          .then(r=>r.text())
-          .then(html=>{
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html,'text/html');
-            const newContent = doc.querySelector('#ai-content');
-            if(newContent) document.querySelector('#ai-content').replaceWith(newContent);
-          });
-      }
-    }catch(err){ console.error(err); }
-  };
+ws.onmessage = (e)=>{
+  try{
+    const msg = JSON.parse(e.data);
+    if(msg.type==='thinking'){
+      document.getElementById('thinking-text').textContent = msg.text;
+    }
+    if(msg.type==='update'){
+      fetch(location.href)
+        .then(r=>r.text())
+        .then(html=>{
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html,'text/html');
+          const newContent = doc.querySelector('#ai-content');
+          if(newContent) document.querySelector('#ai-content').replaceWith(newContent);
+          const newTitle = doc.querySelector('title');
+          if(newTitle) document.title = newTitle.textContent;
+          const siteName = doc.querySelector('#site-name');
+          if(siteName) document.getElementById('site-name').textContent = siteName.textContent;
+        });
+    }
+  }catch(err){ console.error(err); }
+};
 </script>
 </body>
 </html>
