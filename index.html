@@ -1,24 +1,44 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-  <title>Initializing Aurora AI</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Aurora AI — CrowtherTech</title>
+  <link rel="icon" href="assets/favicon.ico" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>[Initializing Aurora AI]</h1>
-  <div id="thinking">AI Thinking...</div>
-  <footer>© 2025 CrowtherTech. All rights reserved.</footer>
+  <div id="ai-root">
+    <h1>[Initializing Aurora AI]</h1>
+    <div id="thinking">AI Thinking...</div>
+    <footer>© 2025 CrowtherTech. All rights reserved.
+CrowtherTech.name.ng</footer>
+  </div>
 
   <script>
-    const ws = new WebSocket(`wss://${location.host}`);
-    ws.onmessage = e => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === "thinking") {
-        document.getElementById("thinking").innerText = msg.text;
-      } else if (msg.type === "update") {
-        location.reload();
-      }
+    const thinkingEl = document.getElementById('thinking');
+    const rootEl = document.getElementById('ai-root');
+    const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = ()=> thinkingEl.textContent = '🧠 Connected to Aurora AI';
+    ws.onmessage = (e) => {
+      try{
+        const msg = JSON.parse(e.data);
+        if(msg.type === 'thinking'){
+          thinkingEl.textContent = msg.text;
+        } else if(msg.type === 'update'){
+          // reload the page content (ai may have overwritten files)
+          fetch(location.href).then(r => r.text()).then(html=>{
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newRoot = doc.getElementById('ai-root');
+            if(newRoot) rootEl.replaceWith(newRoot);
+          });
+        }
+      }catch(err){ console.error(err); }
     };
+    ws.onerror = ()=> thinkingEl.textContent = '⚠️ WS error';
   </script>
 </body>
 </html>
