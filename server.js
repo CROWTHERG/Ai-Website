@@ -17,26 +17,21 @@ const LOG_DIR = path.join(__dirname,'logs');
 if(!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR,{recursive:true});
 const LOG_FILE = path.join(LOG_DIR,'ai.log');
 
-// ----------------- WebSocket -----------------
 const server = app.listen(PORT, ()=>{
   console.log(`Server running on port ${PORT}`);
 });
 const wss = new WebSocketServer({ server });
 
-function broadcast(type, text){
-  const msg = JSON.stringify({ type, text });
-  wss.clients.forEach(c=>{
-    if(c.readyState===c.OPEN) c.send(msg);
-  });
+function broadcast(type,text){
+  const msg = JSON.stringify({type,text});
+  wss.clients.forEach(c=>{ if(c.readyState===c.OPEN) c.send(msg); });
 }
 
-// ----------------- Logging -----------------
 function appendLog(text){
   const stamp = new Date().toISOString();
   fs.appendFileSync(LOG_FILE, `[${stamp}] ${text}\n`);
 }
 
-// ----------------- Run AI -----------------
 function runAIProcess(){
   return new Promise((resolve,reject)=>{
     if(!fs.existsSync(AI_SCRIPT)) return reject(new Error('ai_brain.js missing'));
@@ -62,7 +57,6 @@ function runAIProcess(){
   });
 }
 
-// ----------------- Manual AI trigger -----------------
 app.all(['/run-ai','/run'], async (req,res)=>{
   const token = (req.headers['x-admin-token'] || req.query.token || '');
   if(token!==ADMIN_TOKEN) return res.status(401).json({error:'Unauthorized'});
@@ -76,26 +70,21 @@ app.all(['/run-ai','/run'], async (req,res)=>{
   }
 });
 
-// ----------------- Daily AI run -----------------
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 0 * * *';
 cron.schedule(CRON_SCHEDULE, ()=>{
   appendLog('Scheduled AI run started');
   runAIProcess().catch(e=>appendLog('Scheduled AI run error: '+e));
 },{timezone:'UTC'});
 
-// ----------------- Static site -----------------
 app.use(express.static(__dirname));
 
-// ----------------- Health check -----------------
 app.get('/health', (req,res)=>res.json({status:'ok', timestamp:new Date().toISOString()}));
 
-// ----------------- Logs -----------------
 app.get('/logs', (req,res)=>{
   if(!fs.existsSync(LOG_FILE)) return res.send('No logs yet.');
   const data = fs.readFileSync(LOG_FILE,'utf8');
   res.type('text/plain').send(data.split('\n').slice(-200).join('\n'));
 });
 
-// ----------------- Shutdown -----------------
 process.on('SIGINT', ()=>server.close(()=>process.exit(0)));
 process.on('SIGTERM', ()=>server.close(()=>process.exit(0)));

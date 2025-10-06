@@ -1,50 +1,30 @@
-/* Global styles */
 body {
   margin: 0;
   padding: 0;
-  background: #111;
-  color: #eaf6ff;
   font-family: Inter, system-ui, Arial, sans-serif;
-  line-height: 1.6;
+  background: #0a0f1a;
+  color: #eaf6ff;
 }
 
 header, footer {
   text-align: center;
-  padding: 1rem 0;
-}
-
-a {
-  color: #9ef7d3;
-  text-decoration: none;
-}
-
-main {
-  max-width: 800px;
-  margin: 2rem auto;
-  padding: 0 1rem;
-}
-
-/* AI-CSS-START */
-/* This region is dynamically updated by ai_brain.js */
-/* Example initial AI style */
-#site-name {
-  font-weight: 700;
-  font-size: 2rem;
-  letter-spacing: 0.6px;
+  padding: 1rem;
 }
 
 #ai-content {
+  max-width: 800px;
+  margin: 2rem auto;
   background: rgba(255,255,255,0.02);
   padding: 1rem;
   border-radius: 10px;
-  margin-bottom: 2rem;
 }
 
-#ai-content article h2 {
-  color: #9ef7d3;
+#site-name {
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  font-size: 2rem;
 }
 
-#ai-content article p {
-  margin: 0.5rem 0;
-}
+/* AI-CSS-START */
+/* AI-generated CSS will be inserted here */
 /* AI-CSS-END */

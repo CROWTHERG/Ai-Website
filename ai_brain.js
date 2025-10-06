@@ -15,12 +15,11 @@ const END = '<!-- AI-END -->';
 const CSS_START = '/* AI-CSS-START */';
 const CSS_END = '/* AI-CSS-END */';
 
-function read(p){ return fs.existsSync(p) ? fs.readFileSync(p,'utf8') : ''; }
+function read(p){ return fs.existsSync(p)?fs.readFileSync(p,'utf8'):''; }
 function write(p,c){ fs.writeFileSync(p,c,'utf8'); }
 function ensureBackupDir(){ if(!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR); }
-function backupFile(p){ ensureBackupDir(); fs.copyFileSync(p, path.join(BACKUP_DIR, path.basename(p)+'.bak')); }
+function backupFile(p){ ensureBackupDir(); fs.copyFileSync(p,path.join(BACKUP_DIR,path.basename(p)+'.bak')); }
 
-// ----------------- Simulated AI content generator -----------------
 function generateAIContent(memory){
   const types = ['microblog','portfolio','gallery','journal','tools-portal','idea-lab'];
   const choice = types[memory.length % types.length];
@@ -46,62 +45,51 @@ body{background:linear-gradient(180deg,var(--bg),#071223);color:var(--text);font
   return { htmlFragment, cssFragment, siteName: name, siteType: choice, textLines };
 }
 
-// ----------------- Simulate live thinking -----------------
 async function streamThinking(lines){
   for(const line of lines){
     for(const word of line.split(' ')){
       process.stdout.write(word+' ');
-      await new Promise(r=>setTimeout(r,100)); // 100ms per word
+      await new Promise(r=>setTimeout(r,100));
     }
     process.stdout.write('\n');
     await new Promise(r=>setTimeout(r,200));
   }
 }
 
-// ----------------- Main run -----------------
 async function run(){
   console.log('[AI-BRAIN] Starting AI brain run...');
-
-  // Backup
   backupFile(INDEX);
   backupFile(CSS);
 
-  // Memory
   let memory = [];
   try{ memory = JSON.parse(read(MEMORY)||'[]'); }catch{}
 
-  // Generate
   const plan = generateAIContent(memory);
-
-  // Stream thinking
   await streamThinking(plan.textLines);
 
-  // Update HTML
   let html = read(INDEX);
   const s = html.indexOf(START);
   const e = html.indexOf(END);
-  if(s===-1 || e===-1 || e<s) throw new Error('AI HTML markers missing');
+  if(s===-1||e===-1||e<s) throw new Error('AI HTML markers missing');
   const before = html.slice(0,s+START.length);
   const after = html.slice(e);
-  write(INDEX, before+'\n'+plan.htmlFragment+'\n'+after);
+  write(INDEX,before+'\n'+plan.htmlFragment+'\n'+after);
 
-  // Update CSS
   let css = read(CSS);
   const cs = css.indexOf(CSS_START);
   const ce = css.indexOf(CSS_END);
-  if(cs===-1 || ce===-1 || ce<cs) throw new Error('AI CSS markers missing');
+  if(cs===-1||ce===-1||ce<cs) throw new Error('AI CSS markers missing');
   const cssBefore = css.slice(0,cs+CSS_START.length);
   const cssAfter = css.slice(ce);
-  write(CSS, cssBefore+'\n'+plan.cssFragment+'\n'+cssAfter);
+  write(CSS,cssBefore+'\n'+plan.cssFragment+'\n'+cssAfter);
 
-  // Update memory
   memory.push({ date:new Date().toISOString(), siteName:plan.siteName, siteType:plan.siteType });
-  write(MEMORY, JSON.stringify(memory,null,2));
+  write(MEMORY,JSON.stringify(memory,null,2));
 
   console.log(`[AI-BRAIN] AI update applied. Site name: ${plan.siteName}`);
 }
 
 run().catch(err=>{
-  console.error('Fatal AI brain error:', err);
+  console.error('Fatal AI brain error:',err);
   process.exit(1);
 });

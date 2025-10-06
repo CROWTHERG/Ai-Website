@@ -1,15 +1,14 @@
 {
   "name": "autonomous-ai-full",
   "version": "1.0.0",
-  "main": "server.js",
   "type": "module",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "express-session": "^1.17.3",
-    "ws": "^8.16.0",
+    "ws": "^8.15.0",
     "node-cron": "^3.0.2",
     "jsdom": "^22.1.0"
   }
