@@ -1,95 +1,70 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const INDEX = path.join(__dirname,'index.html');
-const CSS = path.join(__dirname,'style.css');
-const MEMORY = path.join(__dirname,'memory.json');
-const BACKUP_DIR = path.join(__dirname,'.backups');
-
+const INDEX = path.join(process.cwd(),'index.html');
+const MEMORY = path.join(process.cwd(),'memory.json');
+const PAGES_DIR = path.join(process.cwd(),'pages');
 const START = '<!-- AI-START -->';
 const END = '<!-- AI-END -->';
-const CSS_START = '/* AI-CSS-START */';
-const CSS_END = '/* AI-CSS-END */';
 
-function read(p){ return fs.existsSync(p)?fs.readFileSync(p,'utf8'):''; }
+function read(p){ return fs.existsSync(p)?fs.readFileSync(p,'utf8'):""; }
 function write(p,c){ fs.writeFileSync(p,c,'utf8'); }
-function ensureBackupDir(){ if(!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR); }
-function backupFile(p){ ensureBackupDir(); fs.copyFileSync(p,path.join(BACKUP_DIR,path.basename(p)+'.bak')); }
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
-function generateAIContent(memory){
-  const types = ['microblog','portfolio','gallery','journal','tools-portal','idea-lab'];
-  const choice = types[memory.length % types.length];
-  const nameBases = ['Nova','Aurora','Lumen','Echo','Pulse','Node','Atlas','Horizon'];
-  const name = `${nameBases[memory.length % nameBases.length]}-${Math.floor(Math.random()*900+100)}`;
-
+function generateContent(memory){
+  const names = ['Aurora','Nova','Lumen','Echo','Pulse'];
+  const types = ['microblog','portfolio','gallery','tools-portal'];
+  const name = `${names[memory.length%names.length]}-${Math.floor(Math.random()*900+100)}`;
+  const type = types[memory.length%types.length];
+  const htmlFragment = `<article>
+<h2>Welcome to ${name}</h2>
+<p>Type: ${type}. AI evolving site autonomously.</p>
+<p>Generated at: ${new Date().toLocaleString()}</p>
+</article>`;
   const textLines = [
-    `Welcome to ${name}`,
-    `Type: ${choice}. I (the autonomous AI) chose this role and will evolve the site over time.`,
-    `Today's note: evolving content and layout. Memory length: ${memory.length}.`
+    `Generating site: ${name}`,
+    `Type: ${type}`,
+    `Creating layout and content...`,
+    `Updating pages and styles...`,
+    `Saving to memory.json...`
   ];
-
-  const htmlFragment = `<article>\n${textLines.map(l=>`  <p>${l}</p>`).join('\n')}\n</article>`;
-
-  const cssFragment = `
-/* AI-generated CSS: ${choice} theme */
-:root{--bg:#0a0f1a;--text:#eaf6ff;--accent:#9ef7d3}
-body{background:linear-gradient(180deg,var(--bg),#071223);color:var(--text);font-family:Inter,system-ui,Arial,sans-serif;padding:2rem}
-#site-name{font-weight:700;letter-spacing:0.6px}
-#ai-content{background:rgba(255,255,255,0.02);padding:1rem;border-radius:10px}
-`;
-
-  return { htmlFragment, cssFragment, siteName: name, siteType: choice, textLines };
-}
-
-async function streamThinking(lines){
-  for(const line of lines){
-    for(const word of line.split(' ')){
-      process.stdout.write(word+' ');
-      await new Promise(r=>setTimeout(r,80));
-    }
-    process.stdout.write('\n');
-    await new Promise(r=>setTimeout(r,150));
-  }
+  return { htmlFragment, textLines, name, type };
 }
 
 async function run(){
-  console.log('[AI-BRAIN] Starting AI brain run...');
-  backupFile(INDEX);
-  backupFile(CSS);
-
+  if(!fs.existsSync(PAGES_DIR)) fs.mkdirSync(PAGES_DIR);
   let memory = [];
   try{ memory = JSON.parse(read(MEMORY)||'[]'); }catch{}
+  const plan = generateContent(memory);
 
-  const plan = generateAIContent(memory);
-  await streamThinking(plan.textLines);
+  // Stream thinking
+  for(const line of plan.textLines){
+    for(const word of line.split(' ')){
+      process.stdout.write(word+' ');
+      await sleep(80);
+    }
+    process.stdout.write('\n');
+    await sleep(150);
+  }
 
+  // Update index.html
   let html = read(INDEX);
   const s = html.indexOf(START);
   const e = html.indexOf(END);
-  if(s===-1||e===-1||e<s) throw new Error('AI HTML markers missing');
   const before = html.slice(0,s+START.length);
   const after = html.slice(e);
-  write(INDEX,before+'\n'+plan.htmlFragment+'\n'+after);
+  write(INDEX, before+'\n'+plan.htmlFragment+'\n'+after);
 
-  let css = read(CSS);
-  const cs = css.indexOf(CSS_START);
-  const ce = css.indexOf(CSS_END);
-  if(cs===-1||ce===-1||ce<cs) throw new Error('AI CSS markers missing');
-  const cssBefore = css.slice(0,cs+CSS_START.length);
-  const cssAfter = css.slice(ce);
-  write(CSS,cssBefore+'\n'+plan.cssFragment+'\n'+cssAfter);
+  // Optionally create a new page
+  const pageName = `page-${memory.length+1}.html`;
+  const pagePath = path.join(PAGES_DIR,pageName);
+  write(pagePath, `<html><head><title>${plan.name}</title></head><body>${plan.htmlFragment}</body></html>`);
 
-  memory.push({ date:new Date().toISOString(), siteName:plan.siteName, siteType:plan.siteType });
-  write(MEMORY,JSON.stringify(memory,null,2));
+  // Update memory
+  memory.push({ date: new Date().toISOString(), siteName: plan.name, siteType: plan.type, page: pageName });
+  write(MEMORY, JSON.stringify(memory,null,2));
 
-  console.log(`[AI-BRAIN] AI update applied. Site name: ${plan.siteName}`);
+  console.log(`AI update applied: ${plan.name}`);
 }
 
-run().catch(err=>{
-  console.error('Fatal AI brain error:',err);
-  process.exit(1);
-});
+run().catch(err=>{ console.error(err); process.exit(1); });

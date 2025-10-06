@@ -1,92 +1,53 @@
 import express from 'express';
 import path from 'path';
-import fs from 'fs';
 import { spawn } from 'child_process';
-import { WebSocketServer } from 'ws';
 import cron from 'node-cron';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { WebSocketServer } from 'ws';
+import fs from 'fs';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'changeme';
-const AI_SCRIPT = path.join(__dirname,'ai_brain.js');
-const LOG_DIR = path.join(__dirname,'logs');
-if(!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR,{recursive:true});
-const LOG_FILE = path.join(LOG_DIR,'ai.log');
+const AI_SCRIPT = path.join(process.cwd(), 'ai_brain.js');
 
-const server = app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
-const wss = new WebSocketServer({ server });
+app.use(express.static(process.cwd()));
 
-function broadcast(type,text){
-  const msg = JSON.stringify({type,text});
-  wss.clients.forEach(c=>{ if(c.readyState===c.OPEN) c.send(msg); });
+// WebSocket for live AI Thinking
+const wss = new WebSocketServer({ noServer: true });
+let clients = [];
+wss.on('connection', ws => {
+  clients.push(ws);
+  ws.on('close', () => { clients = clients.filter(c=>c!==ws); });
+});
+
+function broadcastThinking(text){
+  const msg = JSON.stringify({ type:'thinking', text });
+  clients.forEach(ws => ws.readyState===1 && ws.send(msg));
 }
 
-function appendLog(text){
-  const stamp = new Date().toISOString();
-  fs.appendFileSync(LOG_FILE, `[${stamp}] ${text}\n`);
-}
-
+// Run AI process
 function runAIProcess(){
   return new Promise((resolve,reject)=>{
-    if(!fs.existsSync(AI_SCRIPT)) return reject(new Error('ai_brain.js missing'));
-    const child = spawn('node',[AI_SCRIPT],{cwd:__dirname, env:process.env});
-
-    child.stdout.on('data', d=>{
-      const line = d.toString();
-      appendLog(line.trim());
-      broadcast('thinking', line.trim());
+    const child = spawn(process.execPath, [AI_SCRIPT], { cwd: process.cwd() });
+    child.stdout.on('data', d => {
+      const lines = d.toString().split('\n');
+      lines.forEach(line=>{ if(line.trim()) broadcastThinking(line.trim()); });
     });
-
-    child.stderr.on('data', d=>{
-      const line = d.toString();
-      appendLog('[stderr] '+line.trim());
-    });
-
-    child.on('close', code=>{
-      appendLog('AI process exited '+code);
-      resolve({code});
-      broadcast('update','Site updated by AI');
-    });
-
-    child.on('error', err=>reject(err));
+    child.stderr.on('data', d => console.error(d.toString()));
+    child.on('close', code => resolve(code));
+    child.on('error', err => reject(err));
   });
 }
 
-// Manual trigger
-app.all(['/run-ai','/run'], async (req,res)=>{
-  const token = (req.headers['x-admin-token'] || req.query.token || '');
-  if(token!==ADMIN_TOKEN) return res.status(401).json({error:'Unauthorized'});
-  appendLog('Manual AI run triggered');
-  try{
-    const result = await runAIProcess();
-    res.json({ok:true, exitCode: result.code});
-  }catch(e){
-    appendLog('Manual run error: '+e);
-    res.status(500).json({ok:false,error:e.message});
-  }
+// Auto update every 3 hours
+cron.schedule('0 */3 * * *', () => {
+  console.log('Scheduled AI run started');
+  runAIProcess().catch(console.error);
 });
 
-// Schedule daily run
-const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 0 * * *';
-cron.schedule(CRON_SCHEDULE, ()=>{
-  appendLog('Scheduled AI run started');
-  runAIProcess().catch(e=>appendLog('Scheduled AI run error: '+e));
-},{timezone:'UTC'});
+// Initial run
+runAIProcess().catch(console.error);
 
-// Serve site
-app.use(express.static(__dirname));
-
-app.get('/health', (req,res)=>res.json({status:'ok', timestamp:new Date().toISOString()}));
-
-app.get('/logs', (req,res)=>{
-  if(!fs.existsSync(LOG_FILE)) return res.send('No logs yet.');
-  const data = fs.readFileSync(LOG_FILE,'utf8');
-  res.type('text/plain').send(data.split('\n').slice(-200).join('\n'));
+const server = app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
+server.on('upgrade', (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
 });
-
-process.on('SIGINT', ()=>server.close(()=>process.exit(0)));
-process.on('SIGTERM', ()=>server.close(()=>process.exit(0)));
