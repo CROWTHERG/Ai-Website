@@ -1,7 +1,5 @@
 import express from 'express';
 import session from 'express-session';
-import RedisStore from 'connect-redis';
-import Redis from 'ioredis';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
@@ -20,44 +18,33 @@ const LOG_DIR = path.join(__dirname,'logs');
 if(!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR,{recursive:true});
 const LOG_FILE = path.join(LOG_DIR,'ai.log');
 
-// ----------------- Redis session setup -----------------
-const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-const redisStore = new RedisStore({ client: redisClient });
+// ----------------- Visitor tracking -----------------
+let totalVisitors = 0;
+let onlineSessions = new Set();
+
 app.use(session({
-  store: redisStore,
   secret: 'supersecretkey',
   resave: false,
   saveUninitialized: true,
-  cookie: { maxAge: 24*60*60*1000 } // 1 day
+  cookie: { maxAge: 24*60*60*1000 }
 }));
 
-// ----------------- Visitor tracking -----------------
-async function getVisitorStats() {
-  const keys = await redisClient.keys('sess:*');
-  const total = await redisClient.get('total_visitors') || 0;
-  return { online: keys.length, total };
-}
-
-app.get('/api/visitors', async (req,res)=>{
-  try{
-    // increment total visitor if first time
-    if(!req.session.counted){
-      let total = parseInt(await redisClient.get('total_visitors')||0);
-      total += 1;
-      await redisClient.set('total_visitors', total);
-      req.session.counted = true;
-    }
-    const stats = await getVisitorStats();
-    res.json(stats);
-  }catch(e){
-    res.json({online:0,total:0});
+app.use((req,res,next)=>{
+  if(!req.session.counted){
+    totalVisitors++;
+    req.session.counted = true;
   }
+  onlineSessions.add(req.sessionID);
+  res.on('finish', ()=> onlineSessions.delete(req.sessionID));
+  next();
+});
+
+app.get('/api/visitors', (req,res)=>{
+  res.json({ online: onlineSessions.size, total: totalVisitors });
 });
 
 // ----------------- WebSocket for AI thinking -----------------
-const server = app.listen(PORT, ()=>{
-  console.log(`Server running on port ${PORT}`);
-});
+const server = app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
 const wss = new WebSocketServer({ server });
 
 function broadcastThinking(text){
@@ -97,7 +84,7 @@ function runAIProcess() {
   });
 }
 
-// ----------------- Manual trigger -----------------
+// ----------------- Manual AI trigger -----------------
 app.all(['/run-ai','/run'], async (req,res)=>{
   const token = (req.headers['x-admin-token'] || req.query.token || '');
   if(token!==ADMIN_TOKEN) return res.status(401).json({error:'Unauthorized'});
@@ -111,14 +98,14 @@ app.all(['/run-ai','/run'], async (req,res)=>{
   }
 });
 
-// ----------------- Schedule daily AI run -----------------
+// ----------------- Scheduled daily AI run -----------------
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 0 * * *';
 cron.schedule(CRON_SCHEDULE, ()=>{
   appendLog('Scheduled AI run started');
   runAIProcess().catch(e=>appendLog('Scheduled AI run error: '+e));
 },{timezone:'UTC'});
 
-// ----------------- Serve static site -----------------
+// ----------------- Serve static files -----------------
 app.use(express.static(__dirname));
 
 // ----------------- Health check -----------------
