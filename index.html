@@ -28,13 +28,24 @@
 </footer>
 
 <script>
-  // WebSocket for live AI thinking
+  // Connect to server WebSocket
   const ws = new WebSocket(`ws://${location.host}`);
+
+  ws.onopen = ()=>console.log('Connected to AI server');
+
   ws.onmessage = (e)=>{
     try{
       const msg = JSON.parse(e.data);
-      if(msg.type==='thinking') document.getElementById('thinking-text').textContent = msg.text;
-    }catch{}
+      if(msg.type==='thinking'){
+        const span = document.getElementById('thinking-text');
+        span.textContent = msg.text;
+      } else if(msg.type==='update'){
+        // Replace AI article content
+        const article = document.getElementById('ai-article');
+        article.innerHTML = msg.htmlFragment;
+        document.getElementById('site-name').textContent = msg.siteName;
+      }
+    }catch(err){ console.error(err); }
   };
 </script>
 </body>
