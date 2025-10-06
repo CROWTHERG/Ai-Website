@@ -2,8 +2,8 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import cron from 'node-cron';
 import { WebSocketServer } from 'ws';
+import cron from 'node-cron';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,14 +17,14 @@ const LOG_DIR = path.join(__dirname,'logs');
 if(!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR,{recursive:true});
 const LOG_FILE = path.join(LOG_DIR,'ai.log');
 
-// ----------------- WebSocket for AI thinking -----------------
+// ----------------- WebSocket -----------------
 const server = app.listen(PORT, ()=>{
   console.log(`Server running on port ${PORT}`);
 });
 const wss = new WebSocketServer({ server });
 
-function broadcastThinking(text){
-  const msg = JSON.stringify({ type:'thinking', text });
+function broadcast(type, text){
+  const msg = JSON.stringify({ type, text });
   wss.clients.forEach(c=>{
     if(c.readyState===c.OPEN) c.send(msg);
   });
@@ -36,26 +36,28 @@ function appendLog(text){
   fs.appendFileSync(LOG_FILE, `[${stamp}] ${text}\n`);
 }
 
-// ----------------- Run AI brain -----------------
-function runAIProcess() {
+// ----------------- Run AI -----------------
+function runAIProcess(){
   return new Promise((resolve,reject)=>{
     if(!fs.existsSync(AI_SCRIPT)) return reject(new Error('ai_brain.js missing'));
-    const child = spawn('node',[AI_SCRIPT],{cwd: __dirname, env: process.env});
+    const child = spawn('node',[AI_SCRIPT],{cwd:__dirname, env:process.env});
 
     child.stdout.on('data', d=>{
       const line = d.toString();
-      appendLog('[stdout] '+line.replace(/\n/g,'\\n'));
-      broadcastThinking(line.trim());
+      appendLog(line.trim());
+      broadcast('thinking', line.trim());
     });
+
     child.stderr.on('data', d=>{
       const line = d.toString();
-      appendLog('[stderr] '+line.replace(/\n/g,'\\n'));
+      appendLog('[stderr] '+line.trim());
     });
 
     child.on('close', code=>{
       appendLog('AI process exited '+code);
       resolve({code});
     });
+
     child.on('error', err=>reject(err));
   });
 }
@@ -74,26 +76,26 @@ app.all(['/run-ai','/run'], async (req,res)=>{
   }
 });
 
-// ----------------- Schedule daily AI run -----------------
+// ----------------- Daily AI run -----------------
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 0 * * *';
 cron.schedule(CRON_SCHEDULE, ()=>{
   appendLog('Scheduled AI run started');
   runAIProcess().catch(e=>appendLog('Scheduled AI run error: '+e));
 },{timezone:'UTC'});
 
-// ----------------- Serve static site -----------------
+// ----------------- Static site -----------------
 app.use(express.static(__dirname));
 
 // ----------------- Health check -----------------
 app.get('/health', (req,res)=>res.json({status:'ok', timestamp:new Date().toISOString()}));
 
-// ----------------- Log viewer -----------------
+// ----------------- Logs -----------------
 app.get('/logs', (req,res)=>{
   if(!fs.existsSync(LOG_FILE)) return res.send('No logs yet.');
   const data = fs.readFileSync(LOG_FILE,'utf8');
   res.type('text/plain').send(data.split('\n').slice(-200).join('\n'));
 });
 
-// ----------------- Shutdown handlers -----------------
+// ----------------- Shutdown -----------------
 process.on('SIGINT', ()=>server.close(()=>process.exit(0)));
 process.on('SIGTERM', ()=>server.close(()=>process.exit(0)));
