@@ -37,9 +37,11 @@ async function run(){
   try{ memory = JSON.parse(read(MEMORY)||'[]'); }catch{}
   const plan = generateContent(memory);
 
-  // Stream thinking
+  // Stream thinking word by word
   for(const line of plan.textLines){
+    let currentLine = '';
     for(const word of line.split(' ')){
+      currentLine += word + ' ';
       process.stdout.write(word+' ');
       await sleep(80);
     }
@@ -55,7 +57,7 @@ async function run(){
   const after = html.slice(e);
   write(INDEX, before+'\n'+plan.htmlFragment+'\n'+after);
 
-  // Optionally create a new page
+  // Generate a new page
   const pageName = `page-${memory.length+1}.html`;
   const pagePath = path.join(PAGES_DIR,pageName);
   write(pagePath, `<html><head><title>${plan.name}</title></head><body>${plan.htmlFragment}</body></html>`);
