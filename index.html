@@ -21,11 +21,6 @@
     <!-- AI-END -->
     <p><strong>AI Thinking:</strong> <span id="thinking-text">Loading...</span></p>
   </div>
-
-  <div id="visitors">
-    <p>Online visitors: <span id="online-count">0</span></p>
-    <p>Total visitors: <span id="total-count">0</span></p>
-  </div>
 </main>
 
 <footer>
@@ -33,7 +28,7 @@
 </footer>
 
 <script>
-  // WebSocket for AI thinking
+  // WebSocket for live AI thinking
   const ws = new WebSocket(`ws://${location.host}`);
   ws.onmessage = (e)=>{
     try{
@@ -41,18 +36,6 @@
       if(msg.type==='thinking') document.getElementById('thinking-text').textContent = msg.text;
     }catch{}
   };
-
-  // Poll visitors every 3 seconds
-  async function updateVisitors(){
-    try{
-      const res = await fetch('/api/visitors');
-      const data = await res.json();
-      document.getElementById('online-count').textContent = data.online;
-      document.getElementById('total-count').textContent = data.total;
-    }catch{}
-  }
-  setInterval(updateVisitors,3000);
-  updateVisitors();
 </script>
 </body>
 </html>
