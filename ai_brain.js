@@ -1,86 +1,58 @@
-// ai_brain.js
-import fetch from "node-fetch";
-import fs from "fs";
-import path from "path";
+const fs = require('fs');
+const path = require('path');
+const Cohere = require('cohere-ai');
+require('dotenv').config();
 
-const SITE_DIR = "./site";
-const MEMORY_FILE = "./memory.json";
+const COHERE_KEY = process.env.COHERE_API_KEY || 'LzCV9YuZ22dQpW1xlt2EiKK6YcYdSDMKexGFUpn7';
+Cohere.init(COHERE_KEY);
 
-export async function runAI() {
-  console.log("[ai] Starting AI generation...");
+const MEMORY_FILE = path.join(__dirname, 'memory.json');
+const PROTECTED_FOOTER = '© 2025 CrowtherTech. All rights reserved.\nCrowtherTech.name.ng';
 
+if(!fs.existsSync(MEMORY_FILE)) fs.writeFileSync(MEMORY_FILE,'[]','utf8');
+
+async function runAI(){
   const prompt = `
-Generate a full creative website (HTML, CSS, and JS).
-You can decide what the site is about — total freedom.
-You may create one or multiple pages if you wish.
-Avoid templates. Be unique and modern.
-Always include this footer:
-"Created by CrowtherTech — CrowtherTech.name.ng — techcrowther@gmail.com"
-Return only the HTML starting with <!DOCTYPE html>.
+You are a fully autonomous website AI. Create a complete website from scratch.
+Return a JSON mapping of filenames to contents (HTML, CSS, JS, images as base64).
+Each HTML file must include the footer: "${PROTECTED_FOOTER}" exactly.
+Do not follow any template. You are free to create anything: pages, styles, assets.
 `;
 
-  try {
-    const response = await fetch("https://api.cohere.ai/v1/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.COHERE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "command-r-plus",
-        // ✅ Correct structure for the new Cohere Chat API (v2)
-        messages: [
-          {
-            role: "user",
-            content: [{ type: "text", text: prompt.trim() }],
-          },
-        ],
-        temperature: 0.9,
-        max_tokens: 2000,
-      }),
-    });
+  const resp = await Cohere.generate({
+    model: 'command-xlarge-nightly',
+    prompt,
+    max_tokens: 2500,
+    temperature: 0.95
+  });
 
-    const data = await response.json();
-    console.log("[ai debug]", JSON.stringify(data, null, 2));
+  const text = resp.body.generations[0].text;
+  const jsonStart = text.indexOf('{');
+  const jsonEnd = text.lastIndexOf('}')+1;
+  const mapping = JSON.parse(text.slice(jsonStart,jsonEnd));
 
-    const html =
-      data?.text ||
-      data?.message ||
-      data?.response ||
-      data?.generations?.[0]?.text ||
-      data?.output_text ||
-      data?.reply ||
-      "";
-
-    if (!html || !html.trim()) {
-      console.error("[ai error] No valid HTML received from Cohere.");
-      if (!fs.existsSync(SITE_DIR)) fs.mkdirSync(SITE_DIR);
-      fs.writeFileSync(
-        path.join(SITE_DIR, "index.html"),
-        `<h1>AI generation failed</h1>
-         <footer>Created by CrowtherTech —
-         <a href="https://CrowtherTech.name.ng">CrowtherTech.name.ng</a> —
-         techcrowther@gmail.com</footer>`
-      );
-      return;
+  const filesWritten = [];
+  for(const [file, content] of Object.entries(mapping)){
+    const safeFile = path.join(__dirname, file);
+    let data = content;
+    if(typeof content === 'object' && content.b64) {
+      fs.writeFileSync(safeFile, Buffer.from(content.b64,'base64'));
+    } else {
+      if(file.endsWith('.html') && !content.includes(PROTECTED_FOOTER)){
+        data += `\n<footer>${PROTECTED_FOOTER}</footer>`;
+      }
+      fs.writeFileSync(safeFile, data, 'utf8');
     }
-
-    if (!fs.existsSync(SITE_DIR)) fs.mkdirSync(SITE_DIR);
-    fs.writeFileSync(
-      path.join(SITE_DIR, "index.html"),
-      html.trim() +
-        `\n<footer>Created by CrowtherTech —
-        <a href="https://CrowtherTech.name.ng">CrowtherTech.name.ng</a> —
-        techcrowther@gmail.com</footer>`
-    );
-
-    fs.writeFileSync(
-      MEMORY_FILE,
-      JSON.stringify({ lastRun: new Date().toISOString() }, null, 2)
-    );
-
-    console.log("[ai] ✅ Site generation complete.");
-  } catch (err) {
-    console.error("[ai err]", err);
+    filesWritten.push(file);
   }
+
+  // Update memory
+  const mem = JSON.parse(fs.readFileSync(MEMORY_FILE,'utf8'));
+  mem.push({time:new Date().toISOString(),action:'AI run',files:filesWritten});
+  fs.writeFileSync(MEMORY_FILE, JSON.stringify(mem,null,2));
+  
+  // Simulate AI thinking output
+  process.stdout.write('AI Thinking: Aurora AI is updating the site...\n');
 }
+
+runAI().then(()=>process.exit(0)).catch(err=>{console.error(err); process.exit(1);});
