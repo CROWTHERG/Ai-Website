@@ -1,20 +1,22 @@
-# Autonomous AI Full — CrowtherTech
+# autonomous-ai-freewill
 
-Protected creator info:
+Autonomous AI website that may create any files it wants inside `site/`. Protected footer: `Created by CrowtherTech`.
 
 ## Modes
-- **simulate (no cost)**: `MODE=simulate node ai_brain.js` or `npm run simulate`
-- **cohere (real)**: add `COHERE_API_KEY` to env or GitHub Secrets
-- **openai (real)**: add `OPENAI_API_KEY` to env or GitHub Secrets
+- simulate (no-cost): `MODE=simulate node ai_brain.js`
+- real: set `COHERE_API_KEY` environment variable then `node server.js` (server will call ai_brain.js)
 
-## Install & test locally
+## Run locally
 1. `npm install`
-2. `node validator.js`  # ensures protected info & markers exist
-3. `npm run simulate`   # test without any API keys
-4. For real runs set COHERE_API_KEY or OPENAI_API_KEY:
-   - `COHERE_API_KEY=... node ai_brain.js` or add to GitHub Secrets to run daily
+2. Set env vars:
+   - `COHERE_API_KEY=...` (or use simulate)
+   - `ADMIN_TOKEN=choose-a-secret` (recommended)
+3. `node server.js`
+4. Visit `http://localhost:3000` (the server serves files in ./site)
+5. Manually trigger generation: `curl "http://localhost:3000/run-ai?token=YOUR_TOKEN"`
 
-## Notes
-- The AI may change site type, name, CSS, and HTML content — but **cannot modify** the protected creator info.
-- Real API usage may cost money; simulate mode is free.
-- The GitHub Action runs once every 24 hours (adjust cron if you want another schedule).
+## Safety & limits
+- No external <script src=> or <iframe src=> allowed.
+- Each file limited to 150 KB, total site limited to 2 MB.
+- All HTML files must include the footer text or generation is rejected.
+- Backups stored in `backups/` before each run.

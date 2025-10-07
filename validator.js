@@ -2,24 +2,48 @@
 const fs = require('fs');
 const path = require('path');
 
-const INDEX = path.join(process.cwd(),'index.html');
-const START = '<!-- AI-START -->';
-const END = '<!-- AI-END -->';
-const CSS_START = '/* AI-CSS-START */';
-const CSS_END = '/* AI-CSS-END */';
-const PROTECTED_SNIPPET = 'Created by CrowtherTech';
+const SITE_DIR = path.join(process.cwd(), 'site');
+const FOOTER_SNIPPET = 'Created by CrowtherTech';
 
-function abort(msg){
-  console.error(msg);
-  process.exit(1);
+function walk(dir, base = '') {
+  let files = [];
+  if (!fs.existsSync(dir)) return files;
+  for (const f of fs.readdirSync(dir)) {
+    const full = path.join(dir, f);
+    const rel = base ? base + '/' + f : f;
+    if (fs.statSync(full).isDirectory()) files = files.concat(walk(full, rel));
+    else files.push(rel);
+  }
+  return files;
 }
 
-if(!fs.existsSync(INDEX)) abort('index.html missing.');
-const html = fs.readFileSync(INDEX,'utf8');
-if(!html.includes(START) || !html.includes(END)) abort('AI HTML markers missing.');
-if(!html.includes(PROTECTED_SNIPPET)) abort('Protected creator info missing or modified!');
-const cssPath = path.join(process.cwd(),'style.css');
-if(!fs.existsSync(cssPath)) abort('style.css missing.');
-const css = fs.readFileSync(cssPath,'utf8');
-if(!css.includes(CSS_START) || !css.includes(CSS_END)) abort('AI CSS markers missing.');
-console.log('Validator OK: markers and protected info present.');
+const files = walk(SITE_DIR);
+if (files.length === 0) console.log('No files in site/ yet.');
+
+let ok = true;
+for (const f of files) {
+  const full = path.join(SITE_DIR, f);
+  const content = fs.readFileSync(full, 'utf8');
+  if (f.endsWith('.html')) {
+    if (!content.includes(FOOTER_SNIPPET)) {
+      console.error('ERROR: footer missing in', f);
+      ok = false;
+    }
+    if (/src\s*=\s*["']https?:\/\//i.test(content) && /<script/i.test(content)) {
+      console.error('ERROR: external script tag detected in', f);
+      ok = false;
+    }
+    if (/src\s*=\s*["']https?:\/\//i.test(content) && /<iframe/i.test(content)) {
+      console.error('ERROR: external iframe detected in', f);
+      ok = false;
+    }
+  }
+  // size check
+  const stat = fs.statSync(full);
+  if (stat.size > 150 * 1024) {
+    console.error('ERROR: file too large', f, stat.size);
+    ok = false;
+  }
+}
+if (ok) console.log('Validator: all checks passed.');
+else process.exit(1);

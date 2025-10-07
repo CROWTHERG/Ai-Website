@@ -1,96 +1,97 @@
 // server.js
-require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
-const { WebSocketServer } = require('ws');
 const cron = require('node-cron');
-
-const PORT = process.env.PORT || 3000;
-const AI_SCRIPT = path.join(process.cwd(), 'ai_brain.js');
-const LOG_FILE = path.join(process.cwd(), 'logs.txt');
-
-function log(msg){
-  const t = new Date().toISOString();
-  try { fs.appendFileSync(LOG_FILE, `[${t}] ${msg}\n`); } catch {}
-  console.log(msg);
-}
+const { spawn } = require('child_process');
 
 const app = express();
-app.use(express.static(process.cwd()));
+const PORT = process.env.PORT || 3000;
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 0 * * *'; // daily at 00:00 UTC
+const RUN_ON_START = (process.env.RUN_ON_START || 'true').toLowerCase() === 'true';
 
-// start server
-const server = app.listen(PORT, () => {
-  log(`Server listening on port ${PORT}`);
-});
+const SITE_DIR = path.join(process.cwd(), 'site');
+const LOG_DIR = path.join(process.cwd(), 'logs');
+const LOG_FILE = path.join(LOG_DIR, 'ai.log');
+const AI_SCRIPT = path.join(process.cwd(), 'ai_brain.js');
 
-// WebSocket server for live AI thinking
-const wss = new WebSocketServer({ server });
-const clients = new Set();
+if (!fs.existsSync(SITE_DIR)) fs.mkdirSync(SITE_DIR, { recursive: true });
+if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 
-wss.on('connection', ws => {
-  clients.add(ws);
-  ws.send(JSON.stringify({ type: 'info', text: 'Connected to Aurora AI' }));
-  ws.on('close', ()=> clients.delete(ws));
-});
-
-// broadcast helper
-function broadcast(type, text){
-  const msg = JSON.stringify({ type, text });
-  for(const c of clients){
-    if(c.readyState === 1) c.send(msg);
-  }
+function appendLog(line) {
+  const time = new Date().toISOString();
+  fs.appendFileSync(LOG_FILE, `[${time}] ${line}\n`);
+  console.log(line);
 }
 
-// Run AI child process and stream stdout lines as thinking
-function runAIProcess(){
+app.use(express.static(SITE_DIR));
+
+app.get('/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+
+app.get('/logs', (req, res) => {
+  if (!fs.existsSync(LOG_FILE)) return res.status(200).send('No logs yet.');
+  const content = fs.readFileSync(LOG_FILE, 'utf8');
+  res.type('text/plain').send(content.split('\n').slice(-500).join('\n'));
+});
+
+app.all(['/run-ai', '/run'], async (req, res) => {
+  // token via header x-admin-token or ?token=
+  const header = (req.headers['x-admin-token'] || '').toString();
+  const token = header || (req.query && req.query.token ? req.query.token.toString() : '');
+  if (!ADMIN_TOKEN) return res.status(403).json({ error: 'ADMIN_TOKEN not set on server.' });
+  if (!token || token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized - invalid token.' });
+
+  appendLog('Manual AI run requested.');
+  try {
+    const result = await runAIProcess();
+    appendLog('Manual run finished. exit=' + result.code);
+    res.json({ ok: true, code: result.code, stdout_tail: result.stdout.slice(-2000) });
+  } catch (err) {
+    appendLog('Manual run failed: ' + String(err));
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+function runAIProcess() {
   return new Promise((resolve, reject) => {
-    if(!fs.existsSync(AI_SCRIPT)) return reject(new Error('ai_brain.js missing'));
-    const child = spawn(process.execPath, [AI_SCRIPT], { cwd: process.cwd(), env: process.env });
+    if (!fs.existsSync(AI_SCRIPT)) return reject(new Error('ai_brain.js not found'));
+    const child = spawn(process.execPath, [AI_SCRIPT], { env: process.env, cwd: process.cwd() });
 
-    child.stdout.on('data', chunk => {
-      const s = chunk.toString();
-      // break into lines and broadcast each non-empty
-      s.split(/\r?\n/).filter(Boolean).forEach(line=>{
-        log('[AI] ' + line);
-        broadcast('thinking', line);
-      });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', d => {
+      const s = d.toString();
+      stdout += s;
+      appendLog('[ai] ' + s.replace(/\n/g, '\\n'));
     });
-
-    child.stderr.on('data', chunk => {
-      const s = chunk.toString();
-      log('[AI-ERR] ' + s.trim());
-      broadcast('thinking', `[AI-ERR] ${s.trim()}`);
+    child.stderr.on('data', d => {
+      const s = d.toString();
+      stderr += s;
+      appendLog('[ai err] ' + s.replace(/\n/g, '\\n'));
     });
-
-    child.on('close', code => {
-      log(`AI process exited with code ${code}`);
-      broadcast('update', 'AI finished update');
-      resolve(code);
-    });
-
-    child.on('error', err => {
-      log('AI spawn error: ' + err.message);
-      reject(err);
-    });
+    child.on('error', err => reject(err));
+    child.on('close', code => resolve({ code, stdout, stderr }));
   });
 }
 
-// Manual run endpoint (POST) with optional ADMIN_TOKEN header 'x-admin-token'
-app.post('/run-ai', (req, res) => {
-  const token = req.headers['x-admin-token'] || req.query.token || '';
-  if(process.env.ADMIN_TOKEN && token !== process.env.ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
-  log('Manual AI run requested');
-  runAIProcess().then(code => res.json({ ok: true, code })).catch(err => res.status(500).json({ ok: false, error: err.message }));
+app.listen(PORT, () => {
+  appendLog(`Server started on port ${PORT}. Serving ./site`);
+  // schedule
+  try {
+    cron.schedule(CRON_SCHEDULE, () => {
+      appendLog('Scheduled AI run triggered.');
+      runAIProcess().catch(e => appendLog('Scheduled run failed: ' + e));
+    }, { scheduled: true, timezone: 'UTC' });
+  } catch (e) {
+    appendLog('Cron scheduling failed: ' + e + ' — you can call /run-ai manually.');
+  }
+
+  if (RUN_ON_START) {
+    appendLog('RUN_ON_START enabled — launching initial AI run.');
+    runAIProcess().catch(e => appendLog('Initial run error: ' + e));
+  }
 });
 
-// Schedule: every 3 hours at minute 0 (UTC)
-const CRON = process.env.CRON_SCHEDULE || '0 */3 * * *';
-cron.schedule(CRON, () => {
-  log('Scheduled AI run triggered (every 3 hours)');
-  runAIProcess().catch(e => log('Scheduled run error: ' + e.message));
-}, { timezone: 'UTC' });
-
-// initial run on startup
-runAIProcess().catch(err => log('Initial AI run failed: ' + (err.message || err)));
+process.on('SIGINT', () => { appendLog('SIGINT'); process.exit(0); });
+process.on('SIGTERM', () => { appendLog('SIGTERM'); process.exit(0); });
