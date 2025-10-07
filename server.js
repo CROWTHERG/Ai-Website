@@ -1,47 +1,42 @@
 const express = require('express');
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
 const cron = require('node-cron');
-
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const AI_SCRIPT = path.join(__dirname, 'ai_brain.js');
 
-// Serve static files
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname)));
 
-// Simple health check
-app.get('/health', (req,res)=> res.json({status:'ok'}));
+const MEMORY_FILE = path.join(__dirname,'data/memory.json');
+const AI_SCRIPT = path.join(__dirname,'ai_brain.js');
 
-// Manual AI run endpoint
-app.get('/run-ai', async (req,res)=>{
+// Real-time AI content
+app.get('/ai-content', (req,res)=>{
   try{
-    const output = await runAI();
-    res.send(`<pre>${output.stdout}</pre>`);
+    const memory = JSON.parse(fs.readFileSync(MEMORY_FILE,'utf8'));
+    const latest = memory[memory.length-1] || {};
+    res.json({
+      htmlFragment: latest.lastHtml || 'AI is generating content...',
+      thinking: latest.lastThinking || 'AI is thinking...',
+      pages: latest.pages || ['index.html']
+    });
   } catch(e){
-    res.status(500).send(e.message);
+    res.json({htmlFragment:'', thinking:'AI error', pages:['index.html']});
   }
 });
 
-// Run ai_brain.js as a child process
-function runAI(){
-  return new Promise((resolve,reject)=>{
-    const child = spawn('node', [AI_SCRIPT], { env: process.env });
-    let stdout='', stderr='';
+// Manual AI run
+app.get('/run-ai', (req,res)=>{
+  const child = spawn(process.execPath,[AI_SCRIPT],{cwd: __dirname});
+  child.on('close', code=>res.json({status:'AI run finished', code}));
+});
 
-    child.stdout.on('data', d => { stdout += d.toString(); });
-    child.stderr.on('data', d => { stderr += d.toString(); });
-    child.on('close', code => resolve({ code, stdout, stderr }));
-    child.on('error', err => reject(err));
-  });
-}
-
-// Schedule AI run every 3 hours
+// Scheduled AI run every 3 hours
 cron.schedule('0 */3 * * *', ()=>{
-  console.log('[CRON] Running AI brain...');
-  runAI().then(r=>console.log('[CRON] AI run finished')).catch(e=>console.error(e));
+  const child = spawn(process.execPath,[AI_SCRIPT],{cwd: __dirname});
+  child.on('close', code=>console.log('Scheduled AI run finished', code));
 });
 
 app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));

@@ -1,49 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aurora AI Website</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aurora AI Website</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1 id="site-name">Aurora AI</h1>
-    <nav>
-      <ul>
-        <li><a href="#">Home</a></li>
-        <li><a href="#">About</a></li>
-        <li><a href="#">Projects</a></li>
-        <li><a href="#">Contact</a></li>
-      </ul>
-    </nav>
-  </header>
+<header>
+  <h1 id="site-name">Aurora AI</h1>
+  <nav id="nav-bar">
+    <!-- AI will dynamically update navigation links -->
+  </nav>
+</header>
 
-  <main id="ai-content">
-    <section>
-      <h2>Welcome!</h2>
-      <p>The AI is generating this content autonomously. Everything you see here will evolve over time.</p>
-    </section>
-    <section>
-      <h2>AI Thinking:</h2>
-      <div id="ai-thinking">Loading creative ideas...</div>
-    </section>
-  </main>
+<main id="ai-content">
+  <section>
+    <h2>Welcome!</h2>
+    <p id="ai-text">AI is autonomously generating this website. Content evolves in real time...</p>
+  </section>
+  <section>
+    <h2>AI Thinking:</h2>
+    <div id="ai-thinking">Loading creative ideas...</div>
+  </section>
+</main>
 
-  <footer>
-    © 2025 CrowtherTech. All rights reserved.<br>
-    CrowtherTech.name.ng
-  </footer>
+<footer>
+© 2025 CrowtherTech. All rights reserved.<br>
+CrowtherTech.name.ng
+</footer>
 
-  <script>
-    // Simulated "thinking" effect for first visit
-    const thinking = document.getElementById('ai-thinking');
-    let words = ["Designing layout...", "Creating content...", "Evolving styles...", "Generating pages..."];
-    let idx = 0;
-    setInterval(()=>{
-      thinking.textContent = words[idx % words.length];
-      idx++;
-    }, 1500);
-  </script>
+<script>
+async function fetchAIContent() {
+  try {
+    const res = await fetch('/ai-content');
+    const data = await res.json();
+    document.getElementById('ai-text').innerHTML = data.htmlFragment || 'Generating content...';
+    document.getElementById('ai-thinking').textContent = data.thinking || 'AI is thinking...';
+    const nav = document.getElementById('nav-bar');
+    nav.innerHTML = '';
+    if(data.pages) {
+      data.pages.forEach(p=>{
+        const a = document.createElement('a');
+        a.href = p;
+        a.textContent = p.replace('.html','').toUpperCase();
+        nav.appendChild(a);
+        nav.appendChild(document.createTextNode(' | '));
+      });
+    }
+  } catch (e) { console.error(e); }
+}
+
+setInterval(fetchAIContent, 3000);
+fetchAIContent();
+</script>
 </body>
 </html>

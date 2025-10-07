@@ -16,17 +16,10 @@ header h1 {
   letter-spacing: 1px;
 }
 
-nav ul {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  justify-content: center;
-  gap: 2rem;
-}
-
-nav a {
+#nav-bar a {
   color: #9ef7d3;
   text-decoration: none;
+  margin: 0 10px;
   font-weight: 500;
 }
 
