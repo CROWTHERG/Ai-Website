@@ -10,13 +10,13 @@ export async function runAI() {
   console.log("[ai] Starting AI generation...");
 
   const prompt = `
-Create a complete, creative HTML5 website from scratch.
-It can include multiple sections or pages if needed.
-Add inline CSS and JS for interactivity.
-Never use templates.
-Include this footer at the end:
+Generate a full creative website (HTML, CSS, and JS).
+You can decide what the site is about — total freedom.
+You may create one or multiple pages if you wish.
+Avoid templates. Be unique and modern.
+Always include this footer:
 "Created by CrowtherTech — CrowtherTech.name.ng — techcrowther@gmail.com"
-Return only valid HTML code starting with <!DOCTYPE html>.
+Return only the HTML starting with <!DOCTYPE html>.
 `;
 
   try {
@@ -28,11 +28,11 @@ Return only valid HTML code starting with <!DOCTYPE html>.
       },
       body: JSON.stringify({
         model: "command-r-plus",
-        // ✅ Correct field name for 2025 Cohere Chat API
+        // ✅ Correct structure for the new Cohere Chat API (v2)
         messages: [
           {
             role: "user",
-            message: prompt.trim(),
+            content: [{ type: "text", text: prompt.trim() }],
           },
         ],
         temperature: 0.9,
@@ -48,6 +48,8 @@ Return only valid HTML code starting with <!DOCTYPE html>.
       data?.message ||
       data?.response ||
       data?.generations?.[0]?.text ||
+      data?.output_text ||
+      data?.reply ||
       "";
 
     if (!html || !html.trim()) {
