@@ -1,58 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aurora AI Website</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Aurora AI (initializing)</title>
 </head>
 <body>
-<header>
-  <h1 id="site-name">Aurora AI</h1>
-  <nav id="nav-bar">
-    <!-- AI will dynamically update navigation links -->
-  </nav>
-</header>
-
-<main id="ai-content">
-  <section>
-    <h2>Welcome!</h2>
-    <p id="ai-text">AI is autonomously generating this website. Content evolves in real time...</p>
-  </section>
-  <section>
-    <h2>AI Thinking:</h2>
-    <div id="ai-thinking">Loading creative ideas...</div>
-  </section>
-</main>
-
-<footer>
-© 2025 CrowtherTech. All rights reserved.<br>
-CrowtherTech.name.ng
-</footer>
-
-<script>
-async function fetchAIContent() {
-  try {
-    const res = await fetch('/ai-content');
-    const data = await res.json();
-    document.getElementById('ai-text').innerHTML = data.htmlFragment || 'Generating content...';
-    document.getElementById('ai-thinking').textContent = data.thinking || 'AI is thinking...';
-    const nav = document.getElementById('nav-bar');
-    nav.innerHTML = '';
-    if(data.pages) {
-      data.pages.forEach(p=>{
-        const a = document.createElement('a');
-        a.href = p;
-        a.textContent = p.replace('.html','').toUpperCase();
-        nav.appendChild(a);
-        nav.appendChild(document.createTextNode(' | '));
-      });
-    }
-  } catch (e) { console.error(e); }
-}
-
-setInterval(fetchAIContent, 3000);
-fetchAIContent();
-</script>
+  <h1>Initializing Aurora AI…</h1>
+  <div id="thinking">AI Thinking: Loading...</div>
+  <footer>© 2025 CrowtherTech. All rights reserved.
+CrowtherTech.name.ng</footer>
+  <script>
+    // Connect to WebSocket to show live thinking (server broadcasts)
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+    ws.onmessage = (e)=> {
+      try {
+        const msg = JSON.parse(e.data);
+        if(msg.type === 'thinking') document.getElementById('thinking').innerText = msg.text;
+        if(msg.type === 'update') location.reload();
+      } catch(e){ console.error(e); }
+    };
+  </script>
 </body>
 </html>
