@@ -11,18 +11,18 @@ export async function runAI() {
   console.log("[ai] Starting AI generation...");
 
   const prompt = `
-You are a fully autonomous AI website creator.
-You have complete freedom to design any type of website: portfolio, game, tech hub, shop, art site—whatever you imagine.
-You can include HTML, CSS, and JS directly in your output.
-Do NOT follow any template or example.
-Every generation must be unique and creative.
-Return a full valid HTML page beginning with <!DOCTYPE html>.
-At the bottom of the page, always include:
+You are an autonomous AI website creator.
+You have complete freedom to invent any website — portfolio, tech blog, digital art, game portal, futuristic lab — anything.
+You can include HTML, CSS, and JS directly.
+Always start with <!DOCTYPE html>.
+Never use templates or examples; be original.
+At the bottom, always include:
 "Created by CrowtherTech — CrowtherTech.name.ng — techcrowther@gmail.com"
+Return only the HTML code.
 `;
 
   try {
-    const res = await fetch("https://api.cohere.ai/v1/generate", {
+    const res = await fetch("https://api.cohere.ai/v1/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -30,19 +30,23 @@ At the bottom of the page, always include:
       },
       body: JSON.stringify({
         model: "command-r-plus",
-        prompt,
-        max_tokens: 1500,
-        temperature: 0.9
+        messages: [
+          { role: "system", content: "You are an autonomous creative web AI." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.9,
+        max_tokens: 1500
       })
     });
 
     const data = await res.json();
-    console.log("[ai debug]", data); // log response for debugging
+    console.log("[ai debug]", data);
 
-    const html = data.generations?.[0]?.text?.trim();
+    const html = data.text || data.message?.content?.[0]?.text || "";
 
-    if (!html) {
-      console.error("[ai error] No valid HTML received from Cohere");
+    if (!html.trim()) {
+      console.error("[ai error] No valid HTML received from Cohere.");
+      if (!fs.existsSync(SITE_DIR)) fs.mkdirSync(SITE_DIR);
       fs.writeFileSync(
         path.join(SITE_DIR, "index.html"),
         `<h1>AI generation failed</h1>
