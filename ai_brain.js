@@ -10,13 +10,13 @@ export async function runAI() {
   console.log("[ai] Starting AI generation...");
 
   const prompt = `
-Create a complete unique HTML5 website. Be fully creative and include inline CSS and JS if needed.
-You can make it about technology, futuristic design, innovation, portfolio, AI, or creativity.
-Start with <!DOCTYPE html>.
-Never use templates or examples.
-Include my footer:
+Create a complete, creative HTML5 website from scratch.
+It can include multiple sections or pages if needed.
+Add inline CSS and JS for interactivity.
+Never use templates.
+Include this footer at the end:
 "Created by CrowtherTech — CrowtherTech.name.ng — techcrowther@gmail.com"
-Return only valid HTML code.
+Return only valid HTML code starting with <!DOCTYPE html>.
 `;
 
   try {
@@ -28,10 +28,10 @@ Return only valid HTML code.
       },
       body: JSON.stringify({
         model: "command-r-plus",
-        // ✅ Correct structure for Cohere Chat (Oct 2025)
-        chat_history: [
+        // ✅ Correct field name for 2025 Cohere Chat API
+        messages: [
           {
-            role: "USER",
+            role: "user",
             message: prompt.trim(),
           },
         ],
@@ -43,7 +43,6 @@ Return only valid HTML code.
     const data = await response.json();
     console.log("[ai debug]", JSON.stringify(data, null, 2));
 
-    // ✅ Extract generated text safely
     const html =
       data?.text ||
       data?.message ||
@@ -65,13 +64,12 @@ Return only valid HTML code.
     }
 
     if (!fs.existsSync(SITE_DIR)) fs.mkdirSync(SITE_DIR);
-
     fs.writeFileSync(
       path.join(SITE_DIR, "index.html"),
       html.trim() +
         `\n<footer>Created by CrowtherTech —
-      <a href="https://CrowtherTech.name.ng">CrowtherTech.name.ng</a> —
-      techcrowther@gmail.com</footer>`
+        <a href="https://CrowtherTech.name.ng">CrowtherTech.name.ng</a> —
+        techcrowther@gmail.com</footer>`
     );
 
     fs.writeFileSync(
